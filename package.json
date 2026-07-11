@@ -1,0 +1,20 @@
+{
+  "name": "pocketterminal",
+  "version": "1.0.0",
+  "description": "Phone-friendly terminal hub for coding agents — run Claude Code or Codex sessions on your workstations and drive them from anywhere",
+  "scripts": {
+    "start": "bun server.ts",
+    "test": "bun test",
+    "test:e2e": "bun test/e2e.ts"
+  },
+  "engines": {
+    "bun": ">=1.3.14"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}

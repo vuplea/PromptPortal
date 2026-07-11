@@ -1,0 +1,27 @@
+# The hub image (compose service `hub`, docker-compose.yml): the Bun
+# aggregator (server.ts), nothing else. It hosts no terminals, so it carries
+# no toolchain. Runs as the unprivileged user "user" (uid 1000). The
+# workstation image is its own build (Dockerfile.workstation).
+FROM oven/bun:1.3-slim
+
+# Run unprivileged: rename the image's stock uid-1000 user.
+RUN usermod -l user -d /home/user -m bun && groupmod -n user bun
+
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
+COPY server.ts ./
+COPY lib ./lib
+COPY public ./public
+
+# Profiles and quick commands persist on a small dedicated volume. HOST must
+# override the server's loopback default here: the container is only reachable
+# at all through its published (loopback-bound) port or the compose network.
+ENV POCKETTERM_DATA=/data \
+    PORT=8080 \
+    HOST=0.0.0.0
+RUN mkdir /data && chown user:user /data
+
+USER user
+EXPOSE 8080
+CMD ["bun", "server.ts"]

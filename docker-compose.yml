@@ -1,0 +1,85 @@
+services:
+  # The aggregator: serves the UI, authenticates clients, and brokers browser
+  # sockets to workstations. It hosts no terminals itself.
+  hub:
+    build:
+      context: .
+      dockerfile: Dockerfile.hub
+    container_name: pocketterminal-hub
+    restart: unless-stopped
+    # Bound to loopback: the app speaks plaintext HTTP, so it must not be
+    # reachable directly from outside the host. Put a TLS-terminating reverse
+    # proxy in front (on the host, it reaches the app via 127.0.0.1:27180; a
+    # containerized reverse proxy should join this service's network and use
+    # port 8080 directly, and needs no published port at all).
+    ports:
+      - "127.0.0.1:27180:8080"
+    environment:
+      # The one secret: gates browser sign-in (username "pocketterm") and
+      # workstation registration alike (see .env.example).
+      POCKETTERM_PASSWORD: ${POCKETTERM_PASSWORD:?set POCKETTERM_PASSWORD in the environment or .env}
+      POCKETTERM_TRUST_PROXY: ${POCKETTERM_TRUST_PROXY:-}
+    # The hub brokers sockets and spawns nothing; keep it that way.
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    volumes:
+      - hub-data:/data
+    healthcheck:
+      # fetch() resolves on any HTTP status — a 401 still proves the server is
+      # up and answering.
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8080/').then(() => process.exit(0), () => process.exit(1))"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      # A reverse proxy (e.g. Traefik's docker provider) routes to a container
+      # only once it turns healthy; probe fast at startup so a redeploy does
+      # not sit unrouted for a full interval.
+      start_period: 30s
+      start_interval: 2s
+
+  # The `server` workstation: a coding workbench hosting this box's terminal
+  # sessions, linked to the hub exactly like any external workstation — its
+  # launcher and every session dial out, here across the compose network.
+  workstation:
+    build:
+      context: .
+      dockerfile: Dockerfile.workstation
+    container_name: pocketterminal-server
+    restart: unless-stopped
+    # No `init: true` here on purpose: compose's docker-init would sit at PID 1
+    # holding POCKETTERM_PASSWORD in its environment for the container's life.
+    # The entrypoint execs tini (baked into the image) itself, after moving the
+    # secret off the environment.
+    depends_on:
+      - hub
+    environment:
+      POCKETTERM_PASSWORD: ${POCKETTERM_PASSWORD:?set POCKETTERM_PASSWORD in the environment or .env}
+      POCKETTERM_HUB_URL: ws://hub:8080
+      POCKETTERM_NODE_NAME: ${POCKETTERM_NODE_NAME:-server}
+      POCKETTERM_SHELL: ${POCKETTERM_SHELL:-}
+    # This container runs arbitrary commands (that is its job), including
+    # permission-skipping coding agents — a runaway fork bomb must stop at the
+    # container, not take the host's PID table with it. Generous enough for
+    # real builds; no memory cap, since a wrong one would OOM-kill compiles.
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 4096
+    volumes:
+      - home:/home/user
+    healthcheck:
+      # The launcher is the one resident process; sessions are independent of
+      # it, so its presence is what health means here.
+      test: ["CMD", "pgrep", "-f", "pt launcher"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      # The entrypoint installs/updates CLI tools before starting the
+      # launcher; on a degraded network that phase alone can take a few
+      # minutes.
+      start_period: 300s
+      start_interval: 5s
+
+volumes:
+  hub-data:
+  home:

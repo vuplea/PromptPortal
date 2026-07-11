@@ -1,0 +1,224 @@
+:root {
+  --bg: #16161e;
+  --panel: #1f1f2b;
+  --panel-2: #2a2a3a;
+  --text: #d8d8e4;
+  --muted: #8888a0;
+  --accent: #7aa2f7;
+  --danger: #f7768e;
+  --ok: #9ece6a;
+  --warn: #e0af68;
+  --vh: 100dvh;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  height: var(--vh);
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--panel-2);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button.primary { background: var(--accent); color: #101018; font-weight: 600; }
+button.small { padding: 4px 10px; font-size: 13px; }
+button.danger-text { color: var(--danger); background: none; font-size: 17px; padding: 8px; }
+
+input, select {
+  font: inherit;
+  color: inherit;
+  background: var(--panel-2);
+  border: 1px solid #3a3a4e;
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+input:focus, select:focus { outline: 1px solid var(--accent); }
+
+/* ------------------------------------------------------------- views */
+
+body[data-view="home"] #term-view { display: none; }
+body[data-view="term"] #home { display: none; }
+
+/* -------------------------------------------------------------- home */
+
+#home {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  max-width: 640px;
+  margin: 0 auto;
+}
+#home h1 { font-size: 20px; margin: 4px 0 16px; }
+#home section { margin-bottom: 24px; }
+#home h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rows { list-style: none; }
+.rows li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 10px 6px 10px 14px;
+  margin-bottom: 8px;
+}
+.rows li .grow { flex: 1; min-width: 0; cursor: pointer; }
+.rows li .title { font-weight: 600; }
+.rows li .meta {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Secondary lists (e.g. quick commands) take less space than profiles. */
+.rows.compact li {
+  padding: 3px 4px 3px 12px;
+  margin-bottom: 5px;
+  border-radius: 8px;
+}
+.rows.compact .danger-text { font-size: 14px; padding: 5px 8px; }
+
+.empty { color: var(--muted); font-size: 13.5px; }
+.rows:not(:empty) + .empty { display: none; }
+
+#profile-form, #command-form { margin-top: 10px; }
+#profile-form label {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+#profile-form input, #profile-form select { width: 100%; margin-top: 3px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chips button {
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--accent);
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.form-actions { display: flex; gap: 8px; }
+.form-actions input { flex: 1; }
+
+/* ---------------------------------------------------------- terminal */
+
+#term-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#term-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  padding-top: max(2px, env(safe-area-inset-top));
+  background: var(--panel);
+}
+#btn-back { font-size: 18px; line-height: 1; padding: 2px 12px; background: none; }
+#session-select { flex: 1; padding: 2px 8px; font-size: 13px; }
+#btn-keys { background: none; font-size: 14px; padding: 2px 10px; }
+#btn-kill { color: var(--danger); background: none; font-size: 14px; padding: 2px 10px; }
+
+/* The key-bar picker, unfolded from the header's ⚙. */
+#keybar-settings {
+  background: var(--panel);
+  padding: 6px 10px 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+#keybar-settings p { margin: 4px 0; }
+#keybar-settings .chips { margin: 4px 0 8px; }
+#kb-font, #kb-newline { display: flex; align-items: center; gap: 8px; margin: 6px 0 8px; }
+#kb-font button, #kb-newline button { padding: 2px 12px; font-size: 13px; }
+#kb-font span { min-width: 2ch; text-align: center; color: var(--text); }
+#keybar-settings button.armed { background: var(--accent); color: #101018; }
+
+#conn-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--muted); }
+#conn-dot.connected { background: var(--ok); }
+#conn-dot.reconnecting { background: var(--warn); }
+#conn-dot.exited { background: var(--muted); }
+
+#xterm-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 2px 0 0 6px;
+  background: var(--bg);
+}
+#xterm { height: 100%; width: 100%; }
+
+/* Stable touch target over the terminal text; see installTouchLayer in app.js. */
+.touch-layer { position: absolute; inset: 0; z-index: 10; }
+
+#keybar {
+  display: flex;
+  gap: 5px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  background: var(--panel);
+}
+#keybar button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 6px;
+  font-size: 14px;
+  font-family: ui-monospace, Consolas, monospace;
+  background: var(--panel-2);
+  user-select: none;
+  -webkit-user-select: none;
+}
+#keybar button.armed { background: var(--accent); color: #101018; }
+
+/* The stacked ↑↓ slot: ↓ sits in the row, ↑ floats above it over the
+   terminal — the single-row key bar's one exception. */
+.key-updown {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+}
+.key-updown .float {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: rgba(42, 42, 58, .85);
+  border: 1px solid #3a3a4e;
+  opacity: .45; /* floats over the terminal */
+  z-index: 11; /* above the .touch-layer, which would otherwise swallow taps */
+}
+

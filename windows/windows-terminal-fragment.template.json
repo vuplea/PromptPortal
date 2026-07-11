@@ -1,0 +1,12 @@
+{
+  "// note": "install.ps1 resolves the commandline placeholder to the real pt.exe path and writes this file to %LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\\PocketTerminal\\pocketterminal.json (do the same to install by hand).",
+  "profiles": [
+    {
+      "name": "PocketTerminal",
+      "commandline": "\"__PT__\"",
+      "icon": "💻",
+      "closeOnExit": "graceful",
+      "startingDirectory": "%USERPROFILE%"
+    }
+  ]
+}

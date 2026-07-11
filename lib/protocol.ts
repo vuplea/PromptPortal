@@ -1,0 +1,107 @@
+// Wire protocols and shared framing, used by both ends: the hub (server.ts,
+// lib/directory.ts) and the workstation binary (pt/). One frame shape covers
+// every protocol; each frame is a single JSON object.
+//
+// Three WebSocket protocols meet at the hub, told apart by URL path, each
+// carrying its secret in a Sec-WebSocket-Protocol slot (never the URL, which
+// lands in access logs):
+//
+//   BROWSER_PROTOCOL   browser <-> hub, one socket per open session view.
+//     Terminal frames, identical regardless of which workstation hosts the
+//     session:
+//       server -> client : {t:'s', d}         replay snapshot on (re)attach
+//                          {t:'o', d}         live output
+//                          {t:'x', code}      process exited
+//       client -> server : {t:'i', d}         input (keystrokes/paste)
+//                          {t:'r', c, r}      resize to c cols x r rows
+//
+//   SESSION_PROTOCOL   session host (`pt`) -> hub, one outbound socket per
+//     session — the connection *is* the session, so no frame names one. The
+//     host registers, then streams; the hub relays its watching browsers.
+//       host -> hub : {t:'register', session}  once, on connect
+//                     {t:'o', d}               live output (while watched)
+//                     {t:'s', client, d}       replay snapshot for one client
+//                     {t:'x', code[, client]}  process exited
+//       hub -> host : {t:'watch', client}      a browser attached: replay to it
+//                     {t:'unwatch'}            a browser left
+//                     {t:'i', d} {t:'r', c, r} input and resize
+//                     {t:'kill'}               close the session and exit
+//
+//   LAUNCHER_PROTOCOL  workstation launcher (`pt launcher`) -> hub, one
+//     outbound socket per workstation. Exists only so the phone can start
+//     sessions; it relays no terminal traffic.
+//       hub -> launcher : {t:'create', id, label, cwd, command}
+//       launcher -> hub : {t:'created', id, error}   only on spawn failure —
+//                         success is the new session registering itself
+//
+//   The hub also sends {t:'ping'} periodically on every socket so the far
+//   end — workstation or browser — can tell a silent link from a dead one
+//   (the WS-level pong each auto-sends is invisible to its own code).
+
+export const BROWSER_PROTOCOL = 'pocketterminal';
+export const SESSION_PROTOCOL = 'pocketterminal-session';
+export const LAUNCHER_PROTOCOL = 'pocketterminal-launcher';
+
+// The fixed Basic-auth username; the hub password is the only real secret.
+export const BASIC_USERNAME = 'pocketterm';
+
+// A workstation's name: what `pt` validates POCKETTERM_NODE_NAME against, sends
+// as the /launcher?name= param, and the hub re-validates on upgrade. Both ends
+// must apply the identical rule or a name one side accepts silently fails to
+// register on the other. (windows/install.ps1 keeps its own literal copy — it
+// cannot import this.)
+export const NODE_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+// A peer whose send buffer grows past this is too far behind (slow link,
+// backgrounded phone): drop it rather than buffer terminal output without
+// bound. It reconnects and catches up from the replay snapshot.
+export const MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
+
+// What a session host registers, and what the hub's session list serves the
+// UI (GET /api/state). Only live sessions exist: a session whose shell
+// exited is gone moments later (its host exits), so there is no
+// alive/exited state to carry.
+export interface SessionInfo {
+  id: string;
+  label: string;
+  cwd: string;
+  command: string;
+  node?: string; // the hosting workstation's name
+}
+
+export interface Msg {
+  t?: string;
+  id?: string;
+  d?: string;
+  c?: number;
+  r?: number;
+  code?: number | null;
+  client?: string;
+  label?: string;
+  cwd?: string;
+  command?: string;
+  error?: string;
+  session?: SessionInfo;
+}
+
+export function parse(raw: unknown): Msg | null {
+  try {
+    const value = JSON.parse(typeof raw === 'string' ? raw : String(raw));
+    // Arrays are objects to typeof, but no frame is one; letting them through
+    // would hand handlers a "Msg" whose every field is undefined.
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Msg) : null;
+  } catch {
+    return null;
+  }
+}
+
+// The minimal socket surface framing needs, satisfied by Bun's ServerWebSocket
+// and the standard WebSocket alike (readyState 1 is OPEN in both).
+export interface WireSocket {
+  readyState: number;
+  send(data: string): unknown;
+}
+
+export function send(ws: WireSocket, message: Msg): void {
+  if (ws.readyState === 1) ws.send(JSON.stringify(message));
+}

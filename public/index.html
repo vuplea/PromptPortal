@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#16161e">
+<title>PocketTerminal</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body data-view="home">
+
+<main id="home">
+  <h1>PocketTerminal</h1>
+
+  <section>
+    <h2>Running</h2>
+    <ul id="session-list" class="rows"></ul>
+    <p id="no-sessions" class="empty">No terminals running. Launch a profile below.</p>
+  </section>
+
+  <section>
+    <h2>Profiles <button id="btn-new-profile" class="small">+ New</button></h2>
+    <ul id="profile-list" class="rows"></ul>
+    <p id="no-profiles" class="empty">No profiles yet.</p>
+
+    <form id="profile-form" hidden>
+      <input type="hidden" id="pf-replace">
+      <label>Name <input id="pf-name" required autocomplete="off" placeholder="e.g. claude @ my-repo"></label>
+      <label>Directory <input id="pf-cwd" required autocomplete="off" placeholder="/repos/my-repo"></label>
+      <label>Workstation <select id="pf-node" required></select></label>
+      <label>Command (optional) <input id="pf-command" autocomplete="off" placeholder="leave empty for a plain shell"></label>
+      <div id="pf-chips" class="chips"></div>
+      <div class="form-actions">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="pf-cancel">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Quick commands</h2>
+    <ul id="command-list" class="rows compact"></ul>
+    <form id="command-form">
+      <div class="form-actions">
+        <input id="cmd-new" autocomplete="off" placeholder="add a command…">
+        <button type="submit" class="small">Add</button>
+      </div>
+    </form>
+  </section>
+</main>
+
+<div id="term-view">
+  <header id="term-header">
+    <button id="btn-back" title="Back to list">‹</button>
+    <select id="session-select" title="Switch terminal"></select>
+    <span id="conn-dot" title="Connection"></span>
+    <button id="btn-keys" title="Configure key bar">⚙</button>
+    <button id="btn-kill" title="Kill session">✕</button>
+  </header>
+  <div id="keybar-settings" hidden>
+    <p>Key bar — tap to remove:</p>
+    <div id="kb-selected" class="chips"></div>
+    <p>Available — tap to add:</p>
+    <div id="kb-available" class="chips"></div>
+    <p id="kb-font">Font size
+      <button id="fs-minus" type="button">A−</button>
+      <span id="fs-value"></span>
+      <button id="fs-plus" type="button">A+</button>
+    </p>
+    <p id="kb-newline">Newline
+      <button id="nl-ctrl" type="button">Ctrl+Enter</button>
+      <button id="nl-shift" type="button">Shift+Enter</button>
+    </p>
+  </div>
+  <div id="xterm-wrap"><div id="xterm"></div></div>
+  <div id="keybar"></div>
+</div>
+
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

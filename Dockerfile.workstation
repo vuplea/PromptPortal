@@ -1,0 +1,91 @@
+# The workstation image (compose service `workstation`, docker-compose.yml):
+# the `server` workstation — `pt launcher` plus a coding toolchain. Sessions
+# created from the hub run as headless `pt` processes the launcher spawns,
+# each on its own WebSocket to the hub. Runs as the unprivileged user "user"
+# (uid 1000). The hub image is its own build (Dockerfile.hub).
+
+# ----------------------------------------------------------------- pt binary
+# The workstation binary (see pt/), compiled by Bun into one self-contained
+# file. `bun build --compile` targets the stage's own architecture, so
+# multi-arch builds need no target juggling.
+FROM oven/bun:1.3 AS pt-build
+WORKDIR /src
+COPY lib ./lib
+COPY pt ./pt
+RUN bun build --compile ./pt/main.ts --outfile /out/pt
+
+# --------------------------------------------------------------- workstation
+FROM node:22-bookworm
+
+# Tools available to the terminal sessions this container hosts — plus tini,
+# which the entrypoint execs as PID 1 to reap zombies from exited sessions.
+# (Compose `init: true` would do that too, but its docker-init keeps the
+# container's original environment — POCKETTERM_PASSWORD included — for the
+# container's lifetime.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tini \
+        procps \
+        tmux \
+        ripgrep \
+        jq \
+        less \
+        openssh-client \
+        python3 \
+        python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv. Installed system-wide: the home volume shadows ~/.local/bin (the
+# installer's default target) at run time. Download then run as separate steps:
+# piping curl into sh masks a download failure (sh sees empty input and exits 0).
+RUN curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh \
+    && env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh /tmp/uv-install.sh \
+    && rm /tmp/uv-install.sh
+
+# GitHub CLI
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+         > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# .NET 10 SDK. Official installer script detects the architecture. Download
+# then run as separate steps, for the same reason as uv above.
+ENV DOTNET_ROOT=/usr/share/dotnet \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && bash /tmp/dotnet-install.sh --channel 10.0 --install-dir "$DOTNET_ROOT" \
+    && rm /tmp/dotnet-install.sh \
+    && ln -s "$DOTNET_ROOT/dotnet" /usr/local/bin/dotnet
+
+# .NET tools, installed outside $HOME — the home volume would shadow anything
+# under ~/.dotnet/tools.
+ENV PATH="${PATH}:/usr/local/share/dotnet-tools"
+RUN dotnet tool install ilspycmd --tool-path /usr/local/share/dotnet-tools
+
+COPY --from=pt-build /out/pt /usr/local/bin/pt
+COPY workstation-entrypoint.sh /usr/local/bin/workstation-entrypoint.sh
+RUN chmod +x /usr/local/bin/workstation-entrypoint.sh
+
+# Run unprivileged: rename the image's stock uid-1000 user. /home/user is a
+# named volume (auth, repos, per-volume config and shell history all persist
+# there), seeded from the image on first use.
+RUN usermod -l user -d /home/user -m node && groupmod -n user node \
+    && mkdir -p /home/user/repos && chown -R user:user /home/user
+
+# Claude Code and Codex install into $HOME/.local/bin, which lives on the home
+# volume — a build-time install there is shadowed by the volume mount at run
+# time. The entrypoint installs them at startup instead (via each tool's
+# official installer), so they land on the volume and refresh each start.
+ENV HOME=/home/user \
+    PATH="/home/user/.local/bin:${PATH}"
+
+USER user
+WORKDIR /home/user/repos
+# Absolute: a bare name resolves through PATH, whose first entry
+# ($HOME/.local/bin) is on the writable home volume, where a planted script
+# could otherwise shadow it.
+ENTRYPOINT ["/usr/local/bin/workstation-entrypoint.sh"]
