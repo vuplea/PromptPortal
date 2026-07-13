@@ -7,6 +7,8 @@ let commands = [];
 let sessions = [];
 let nodes = []; // connected workstation names
 
+let sessionFilter = ''; // narrows the Running list to one workstation ('' = all)
+
 let currentId = null; // session shown in the terminal view
 let ws = null;
 let lastFrameAt = 0; // last frame on the terminal socket (the hub pings every 30s)
@@ -78,8 +80,24 @@ function meta({ node, cwd, command }) {
 }
 
 function renderHome() {
+  // The filter offers only workstations that currently have sessions, and
+  // hides itself when there is nothing to narrow. A selection whose
+  // workstation lost its last session falls back to all — so the filtered
+  // list is never empty while sessions exist, keeping the "no terminals"
+  // message truthful.
+  const filter = $('#session-filter');
+  const machines = [...new Set(sessions.map((s) => s.node).filter(Boolean))];
+  if (!machines.includes(sessionFilter)) sessionFilter = '';
+  filter.hidden = machines.length < 2;
+  filter.replaceChildren(
+    el('option', { value: '', textContent: 'All workstations' }),
+    ...machines.map((m) => el('option', { value: m, textContent: m })),
+  );
+  filter.value = sessionFilter;
+
+  const shown = sessionFilter ? sessions.filter((s) => s.node === sessionFilter) : sessions;
   const sessionList = $('#session-list');
-  sessionList.replaceChildren(...sessions.map((s) =>
+  sessionList.replaceChildren(...shown.map((s) =>
     el('li', {}, [
       el('div', { className: 'grow', onclick: () => openSession(s.id) }, [
         el('div', { className: 'title', textContent: s.label }),
@@ -120,6 +138,11 @@ function renderHome() {
     ])
   ));
 }
+
+$('#session-filter').onchange = (e) => {
+  sessionFilter = e.target.value;
+  renderHome();
+};
 
 async function launchProfile(profile) {
   const { id } = await api('sessions', { profile: profile.name });

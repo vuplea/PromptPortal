@@ -80,6 +80,16 @@ body[data-view="term"] #home { display: none; }
   align-items: center;
 }
 
+/* The workstation filter in the Running header; undo the h2's heading look. */
+#session-filter {
+  font-size: 12.5px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 2px 8px;
+  max-width: 55%;
+}
+
 .rows { list-style: none; }
 .rows li {
   display: flex;
