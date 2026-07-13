@@ -4,7 +4,7 @@ import { Auth } from './lib/auth';
 import { Store } from './lib/store';
 import { Directory, type PtSocket, type WsData } from './lib/directory';
 import { ClientError } from './lib/errors';
-import { BROWSER_PROTOCOL, LAUNCHER_PROTOCOL, NODE_NAME_RE, SESSION_PROTOCOL, parse, send } from './lib/protocol';
+import { BROWSER_PROTOCOL, LAUNCHER_PROTOCOL, MAX_FIELD_CHARS, NODE_NAME_RE, SESSION_PROTOCOL, parse, send } from './lib/protocol';
 
 // The hub. It serves the browser UI, authenticates clients, and brokers
 // between browser sockets and the terminal workstations registered with it.
@@ -107,10 +107,8 @@ async function readJsonBody(req: Request): Promise<any> {
 
 // ------------------------------------------------------------------- api
 
-// Every string field is human-typed — a name, a path, a command line — so cap
-// it well above any real value; the request body cap alone (64KB) would still
-// admit absurd labels into the store and the UI.
-const MAX_FIELD_CHARS = 2048;
+// The request body cap alone (64KB) would still admit absurd labels into the
+// store and the UI; MAX_FIELD_CHARS (lib/protocol.ts) is the per-field bound.
 const MAX_COMMANDS = 100;
 
 function requireString(value: unknown, name: string, { optional = false } = {}): string {
@@ -178,7 +176,8 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
       // as strings here, though: a non-string serializes into a frame the
       // launcher's parser rejects wholesale, which would surface as a 10s
       // timeout instead of a 400.
-      const created = await directory.createSession(body.node || node, {
+      // An explicit node in the body wins over a profile's pinned workstation.
+      const created = await directory.createSession(requireString(body.node, 'node', { optional: true }) || node, {
         label: requireString(label, 'label', { optional: true }),
         cwd: requireString(cwd, 'cwd'),
         command: requireString(command, 'command', { optional: true }),
@@ -386,7 +385,9 @@ const server = Bun.serve<WsData>({
           } else if (msg.t === 'register') {
             data.conn = directory.registerSession(ws, msg.session);
             if (!data.conn) return ws.close();
-            console.log(`hub: session "${data.conn.info.label}" on "${data.conn.info.node}" connected`);
+            // JSON.stringify keeps control characters in these remote strings
+            // from forging log lines or escaping into the operator's terminal.
+            console.log(`hub: session ${JSON.stringify(data.conn.info.label)} on ${JSON.stringify(data.conn.info.node)} connected`);
           }
           break;
         case 'launcher':

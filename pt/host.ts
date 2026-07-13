@@ -49,8 +49,10 @@ export async function runHost(spec: HostSpec, ctx: HostContext): Promise<never> 
 
   const id = spec.id || crypto.randomUUID();
   setLogTag(`session ${id.slice(0, 8)}`);
-  console.log(`starting: id ${id}, label "${label}", cwd ${cwd}`
-    + (command ? `, command "${command}"` : '') + (windowed ? ', windowed' : ', headless'));
+  // JSON.stringify: these may come from the phone via the hub — control
+  // characters must not reach the log raw (same as launcher.ts).
+  console.log(`starting: id ${id}, label ${JSON.stringify(label)}, cwd ${JSON.stringify(cwd)}`
+    + (command ? `, command ${JSON.stringify(command)}` : '') + (windowed ? ', windowed' : ', headless'));
 
   const session = new Session({
     id,

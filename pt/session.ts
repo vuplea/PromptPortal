@@ -21,6 +21,17 @@ const MAX_QUEUED_INPUT_BYTES = 1024 * 1024;
 // SIGKILLs whatever ignored it (Linux; see Session.kill).
 export const KILL_GRACE_MS = 2000;
 
+// Pty dimensions are clamped, not rejected: a viewer past the bounds (an
+// ultrawide monitor at a small font) keeps resizing at the cap instead of
+// silently freezing the pty at whatever size it opened with. The cap also
+// bounds what a remote frame can make ConPTY allocate.
+const MIN_PTY_DIM = 2;
+const MAX_PTY_DIM = 1000;
+
+function clampDim(n: number): number {
+  return Math.min(Math.max(n, MIN_PTY_DIM), MAX_PTY_DIM);
+}
+
 type PtyInput = Uint8Array | { cols: number; rows: number };
 
 const ENCODER = new TextEncoder();
@@ -134,8 +145,8 @@ export class Session {
       cwd: this.cwd,
       env: childEnv(),
       terminal: {
-        cols: opts.cols || 80,
-        rows: opts.rows || 24,
+        cols: clampDim(opts.cols || 80),
+        rows: clampDim(opts.rows || 24),
         name: 'xterm-256color',
         data: (_terminal, chunk) => {
           this.onRaw?.(chunk);
@@ -216,8 +227,7 @@ export class Session {
   // cost.
   resize(cols: number, rows: number): void {
     if (!Number.isInteger(cols) || !Number.isInteger(rows)) return;
-    if (cols < 2 || rows < 2 || cols > 500 || rows > 500) return;
-    this.enqueue({ cols, rows });
+    this.enqueue({ cols: clampDim(cols), rows: clampDim(rows) });
   }
 
   private enqueue(item: PtyInput): void {

@@ -57,6 +57,13 @@ export const NODE_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 // bound. It reconnects and catches up from the replay snapshot.
 export const MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
 
+// Every string field crossing the trust boundaries is human-typed — a label,
+// a path, a command line — so cap it well above any real value. The HTTP API
+// rejects longer fields (server.ts); session registration truncates instead
+// (lib/directory.ts) — the session is already running, so degrading its
+// display beats refusing to link it.
+export const MAX_FIELD_CHARS = 2048;
+
 // What a session host registers, and what the hub's session list serves the
 // UI (GET /api/state). Only live sessions exist: a session whose shell
 // exited is gone moments later (its host exits), so there is no

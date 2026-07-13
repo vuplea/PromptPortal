@@ -37,7 +37,8 @@ export async function runLauncher(ctx: HostContext): Promise<never> {
       try {
         create(msg, ctx);
       } catch (err) {
-        console.log(`create ${msg.id} failed: ${(err as Error).message}`);
+        // The message can embed the requested cwd; stringified like the fields above.
+        console.log(`create ${msg.id} failed: ${JSON.stringify((err as Error).message)}`);
         post({ t: 'created', id: msg.id, error: (err as Error).message });
       }
     },

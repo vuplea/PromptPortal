@@ -60,6 +60,15 @@ describe('upsertProfile', () => {
     expect(() => store.upsertProfile({ name: 'b', cwd: '/a' }, 'a')).toThrow('already exists');
     expect(store.getProfile('a')).toBeDefined();
   });
+
+  test('caps the count; updates and renames still work at the cap', () => {
+    const store = new Store(tempDir());
+    for (let i = store.profiles.length; i < 100; i++) store.upsertProfile({ name: `p${i}`, cwd: '/tmp' });
+    expect(() => store.upsertProfile({ name: 'over', cwd: '/tmp' })).toThrow('at most');
+    store.upsertProfile({ name: 'p50', cwd: '/elsewhere' });
+    store.upsertProfile({ name: 'p50-renamed', cwd: '/elsewhere' }, 'p50');
+    expect(store.profiles.length).toBe(100);
+  });
 });
 
 test('deleteProfile removes and persists', () => {

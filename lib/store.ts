@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import { ClientError } from './errors';
 
+const MAX_PROFILES = 100;
+
 const DEFAULT_COMMANDS = [
   'claude',
   'codex',
@@ -119,9 +121,14 @@ export class Store {
       if (profiles.some((p) => p.name === name)) throw new ClientError(`a profile named "${name}" already exists`);
       profiles = profiles.filter((p) => p.name !== replace);
     }
-    profiles = profiles.some((p) => p.name === name)
-      ? profiles.map((p) => (p.name === name ? profile : p))
-      : [...profiles, profile];
+    if (profiles.some((p) => p.name === name)) {
+      profiles = profiles.map((p) => (p.name === name ? profile : p));
+    } else {
+      // Bounded like quick commands (server.ts): an authenticated browser
+      // must not grow the store — and every state response — without limit.
+      if (profiles.length >= MAX_PROFILES) throw new ClientError(`at most ${MAX_PROFILES} profiles`);
+      profiles = [...profiles, profile];
+    }
     this.commit({ ...this.data, profiles });
   }
 

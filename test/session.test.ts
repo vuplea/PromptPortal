@@ -35,10 +35,20 @@ test('streams output live, replays it, and emits the exit frame on close', async
   expect(replayed).toContain('pt_marker_1');
   expect(wasAlive).toBe(true);
 
-  // Out-of-range resizes are ignored rather than passed to the pty.
+  // Out-of-range resizes reach the pty clamped to sane bounds; spy on the
+  // terminal handle to capture what is actually applied.
+  const applied: Array<[number, number]> = [];
+  const terminal = (session as any).terminal;
+  (session as any).terminal = {
+    resize(c: number, r: number) { applied.push([c, r]); terminal.resize(c, r); },
+    write(data: Uint8Array) { return terminal.write(data); },
+  };
   session.resize(0, 0);
   session.resize(10000, 10000);
   session.resize(120, 30);
+  await until('clamped resizes applied', () => applied.length === 3);
+  expect(applied).toEqual([[2, 2], [1000, 1000], [120, 30]]);
+  (session as any).terminal = terminal;
 
   session.close();
   await until('exit frame', () => frames.some((f) => f.t === 'x'));

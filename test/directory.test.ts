@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { Directory } from '../lib/directory';
-import type { Msg, SessionInfo } from '../lib/protocol';
+import { MAX_FIELD_CHARS, type Msg, type SessionInfo } from '../lib/protocol';
 
 // The minimal socket surface the directory touches, recording sent frames.
 function fakeSocket(kind: 'session' | 'launcher' | 'browser') {
@@ -34,6 +34,20 @@ describe('registerSession', () => {
     register(directory, 's1');
     expect(directory.registerSession(fakeSocket('session').socket as any, { label: 'no id' })).toBeNull();
     expect(directory.listSessions().map((s) => s.id)).toEqual(['s1']);
+  });
+
+  test('serves only the known fields, truncated to the shared cap', () => {
+    const directory = new Directory();
+    const oversized = 'x'.repeat(MAX_FIELD_CHARS + 100);
+    const conn = directory.registerSession(fakeSocket('session').socket as any,
+      { ...info('s1'), label: oversized, extra: 'smuggled' } as any);
+    expect(conn).not.toBeNull();
+    const listed = directory.listSessions()[0]!;
+    expect(listed.label).toBe(oversized.slice(0, MAX_FIELD_CHARS));
+    expect('extra' in listed).toBe(false);
+    // An oversized id is malformed, not truncated: a truncated id could
+    // collide with another session's.
+    expect(directory.registerSession(fakeSocket('session').socket as any, info(oversized))).toBeNull();
   });
 
   test('a re-registration replaces the previous socket', () => {

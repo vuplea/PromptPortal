@@ -38,7 +38,8 @@ $repo = (Resolve-Path "$PSScriptRoot\..").Path
 $dist = "$PSScriptRoot\dist"
 $null = (Get-Command bun -ErrorAction Stop).Source
 # Bun.spawn's `terminal` option (the pty every session runs in) needs 1.3.14.
-$bunVersion = [version](bun --version)
+# Prerelease suffixes (1.3.16-canary.…) are not [version]-castable; strip them.
+$bunVersion = [version]((bun --version) -replace '[-+].*$', '')
 if ($bunVersion -lt [version]'1.3.14') {
   throw "Bun $bunVersion is too old; pt needs >= 1.3.14 (bun upgrade)"
 }

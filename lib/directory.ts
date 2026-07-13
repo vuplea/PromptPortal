@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from 'bun';
 
 import { ClientError } from './errors';
-import { MAX_BUFFERED_BYTES, send, type Msg, type SessionInfo } from './protocol';
+import { MAX_BUFFERED_BYTES, MAX_FIELD_CHARS, send, type Msg, type SessionInfo } from './protocol';
 
 // The hub's view of the workstation side. Every session is a `pt` process
 // that dialed in on its own outbound WebSocket — the connection *is* the
@@ -128,19 +128,34 @@ export class Directory {
     if (typeof s.id !== 'string' || s.id === '' || typeof s.label !== 'string'
       || typeof s.cwd !== 'string' || typeof s.command !== 'string'
       || typeof s.node !== 'string') return null;
+    // Ids are machine-generated and short; an oversized one is malformed
+    // (truncating it could collide with another session's).
+    if (s.id.length > MAX_FIELD_CHARS) return null;
     // A host this slow already failed its create at the API (the timeout in
     // createSession): the user was told the session did not start, and has
     // likely retried. Registering it now would put a phantom session beside
     // the retry — tell it to die instead (the caller closes the socket).
     if (this.timedOutCreates.delete(s.id)) {
-      console.warn(`hub: killed session "${s.label}" on "${s.node}" — it registered after its create timed out`);
+      // JSON.stringify: remote strings must not put control characters in the log.
+      console.warn(`hub: killed session ${JSON.stringify(s.label)} on ${JSON.stringify(s.node)} — it registered after its create timed out`);
       send(ws, { t: 'kill' });
       return null;
     }
     // A host redialing after a link drop replaces its previous registration:
     // the old socket may not have noticed yet that it is dead.
     this.sessions.get(s.id)?.ws.terminate();
-    const conn = new SessionConn({ ...s }, ws);
+    // Everything here is served to every browser in each state response, so
+    // hold the frame to the same hygiene the HTTP API enforces: the named
+    // fields only, display strings truncated (the session is already running
+    // — degrading its label beats refusing to link it).
+    const cut = (value: string) => value.slice(0, MAX_FIELD_CHARS);
+    const conn = new SessionConn({
+      id: s.id,
+      label: cut(s.label),
+      cwd: cut(s.cwd),
+      command: cut(s.command),
+      node: cut(s.node),
+    }, ws);
     this.sessions.set(s.id, conn);
     const pending = this.pendingCreates.get(s.id);
     if (pending) {
