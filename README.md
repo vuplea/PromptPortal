@@ -1,6 +1,6 @@
 # PocketTerminal
 
-Open a terminal window from your phone running on your PC; work remotely.
+Spawn a terminal window from your phone running on your PC; work remotely.
 Open any terminal window from your PC; pick it up from your phone.
 Use it for Claude Code, Codex or general terminal needs.
 
@@ -19,24 +19,23 @@ phone browser (below). Type in either.</em></p>
 
 Three tiers:
 
-- **Client** — the browser (phone or desktop). One page lists every session on
+- **Client** — the browser (phone). One page lists every session on
   every connected workstation; open one to view and drive it.
 - **Hub**: Serves the UI, authenticates
   clients, and brokers browser sockets to workstations. It is the one piece you host,
-  and should add TLS in front of it: for access from the open Internet, a
-  reverse proxy and an open port (Dokploy on a cloud VM, is an easy way to set that up);
-  or keep it private with a VPN.
+  and for access from the open Internet, a TLS reverse proxy and an open port is required.
+  Dokploy on a cloud VM (e.g. Hetzner), is a suggestion. Or, keep the server private with a VPN.
 - **Workstations**, the machines where terminals actually run: `pt`, one self-contained executable.
   Every session is its own `pt` process owning its pty, dialing the hub over **WebSocket**;
   a small resident `pt launcher` per workstation exists so sessions can be started from the hub.
   The compose deployment also optionally includes one containerized workstation
-  (`server`, in its own container beside the hub).
+  (`server`, in a separate container beside the hub).
 
 ```
   phone ─┐
          ├─(HTTPS/WSS)─▶  HUB  ◀─(outbound WSS per session + launcher)─┬─ Windows workstation "laptop"
- desktop ┘             hub.example.com                                 ├─ Windows workstation "desktop"
-                                                                       └─ workstation "server" (its own container, beside the hub)
+ desktop ┘             hub.example.com                                  ├─ Windows workstation "desktop"
+                                                                        └─ workstation "server" (its own container, beside the hub)
 ```
 
 ### Shared, cooperative control — and one owner
@@ -56,12 +55,11 @@ is exactly what exists.
 
 The compose deployment runs two containers:
 
-- **hub** — the Bun aggregator, nothing else. Serves the UI and brokers
-  browsers to workstations; profiles and quick commands persist on the small
-  `hub-data` volume.
+- **hub** — Serves the UI and brokers browsers to workstations;
+  profiles and quick commands persist on the small `hub-data` volume.
 - **workstation** — a coding workbench registered with the hub as `server`, so
   out of the box you get terminals on the server itself. It bundles Node,
-  .NET 10 SDK (`ilspycmd`), Python 3 (`uv`), `gh`, `tmux`, `ripgrep`, `jq`;
+  .NET 10, Python 3 + uv, `gh`, `tmux`, `ripgrep`, `jq`;
   Claude Code and Codex are installed onto the home volume at each container
   start. `/home/user` is a named volume, so auth, repos, and git config
   survive redeploys; running sessions do not.
@@ -73,17 +71,15 @@ docker compose up -d --build
 
 Configuration, via `.env` or the deploy platform's environment:
 
-| Variable                 | Default  | Purpose                                                       |
-| ------------------------ | -------- | ------------------------------------------------------------- |
-| `POCKETTERM_WEBACCESS_PASSWORD` | required | Browsers sign in with it (username is always `pocketterm`) |
+| Variable                          | Default  | Purpose                                                            |
+| --------------------------------- | -------- | ------------------------------------------------------------------ |
+| `POCKETTERM_WEBACCESS_PASSWORD`   | required | Browsers sign in with it (username is always `pocketterm`)         |
 | `POCKETTERM_WORKSTATION_PASSWORD` | required | Workstations (including the bundled `server` one) register with it |
-| `POCKETTERM_NODE_NAME`   | `server` | The bundled workstation's name in the UI                       |
-| `POCKETTERM_TRUST_PROXY` | unset    | Set to `1` when a reverse proxy you control is the only way in: the brute-force lockout then keys on the client IP it appends to `X-Forwarded-For` instead of the proxy's address (see Security notes) |
+| `POCKETTERM_NODE_NAME`            | `server` | The bundled workstation's name in the UI                           |
+| `POCKETTERM_TRUST_PROXY`          | unset    | Set to `1` when a reverse proxy you control is the only way in: the brute-force lockout then keys on the client IP it appends to `X-Forwarded-For` instead of the proxy's address (see Security notes) |
 
 The hub exposes three WebSocket paths on the same port: `/ws` (browser, token
-auth), `/session` and `/launcher` (workstation, node-secret auth). All are
-ordinary WebSockets, so a TLS-terminating reverse proxy in front needs no
-special config.
+auth), `/session` and `/launcher` (workstation, node-secret auth).
 
 ### Running the hub non-containerized
 
@@ -107,19 +103,16 @@ You can publish it to your tailnet with `tailscale serve`, which adds TLS:
 tailscale serve --bg 27180   # compose hub; bare `bun server.ts`: 8080
 ```
 
-Use the resulting `https://<machine>.<tailnet>.ts.net` as the hub URL and set
-`POCKETTERM_TRUST_PROXY=1`; a bare hub binds `127.0.0.1` by default, so
-`serve` is already the only way in.
+Use the resulting `https://<machine>.<tailnet>.ts.net` as the hub URL and set `POCKETTERM_TRUST_PROXY=1`.
 
 ## Setting up a Windows workstation
 
 MacOS is not implemented yet; support can be added in the future.
 
 The workstation is **one self-contained executable** — `pt.exe` (TypeScript
-compiled by Bun, ConPTY) — so the box needs no runtime installed. `pt` in a
-terminal hosts a session right there (native Windows Terminal, not a
-browser); `pt launcher` is the small logon-task resident that starts sessions
-requested from the hub.
+compiled by Bun, ConPTY). `pt` in a terminal hosts a session right there
+(native Windows Terminal, not a browser); `pt launcher` is the small
+logon-task resident that starts sessions requested from the hub.
 
 Prerequisite: [Bun](https://bun.sh) >= 1.3.14 (build-time only)
 
@@ -133,17 +126,15 @@ It prompts for the workstation password, builds `windows\dist\pt.exe`,
 persists the config (settings as user
 environment variables, the password in **Windows Credential Manager**),
 registers a **scheduled task** that runs `pt launcher` at logon, adds
-`windows\dist` to your PATH (so `pt` works everywhere), and installs a
-Windows Terminal **PocketTerminal profile** that opens a new connected
-session in a tab.
+`windows\dist` to your PATH, and installs a Windows Terminal
+**PocketTerminal profile** that opens a new connected session in a tab.
 
 To ensure all windows you use are accessible remotely,
 set **PocketTerminal profile** as the default Windows Terminal profile.
+For terminals launched from the command line, use `pt -- Write-Host Hello`.
 
 A session created **remotely** (from the phone) opens as an interactive
-window in the workstation's default terminal, already running when you sit
-back down. It is the same shared screen as the phone's — and the same
-session: closing the window ends it everywhere.
+window in the workstation's default terminal.
 
 ### Workstation configuration
 
@@ -174,11 +165,7 @@ straight to the shell.
 ### Workstation logs
 
 The launcher and every session host append to a shared log under
-`~/.pocketterm/logs` (`%USERPROFILE%\.pocketterm\logs` on Windows) — process
-start/exit, hub link ups and downs, session creates — each line headed with
-the writer's identity. This is the place to look when the logon-task launcher
-misbehaves: it runs in an invisible console, so the file is its only record.
-Two files (`pt.0.log`, `pt.1.log`) rotate at 200k lines each.
+`~/.pocketterm/logs`. Two files (`pt.0.log`, `pt.1.log`) rotate at 200k lines each.
 
 ## Security notes
 
@@ -188,14 +175,9 @@ workstation; `POCKETTERM_WORKSTATION_PASSWORD` registers workstation sessions
 and launchers, and holding it lets an attacker impersonate a workstation —
 make both long, random, and different. The hub itself speaks plain HTTP, and
 Basic auth resends the web-access password with every request, which is why
-TLS termination in front is mandatory, especially if hosting over the
-Internet.
-The hub listens on loopback by default: open it with `HOST=0.0.0.0`, paired with
+TLS termination in front is mandatory.
+The standalone hub listens on loopback by default: open it with `HOST=0.0.0.0`, paired with
 a TLS reverse proxy.
-
-**Planned:** GitHub interactive OAuth (device flow) as an alternative to the
-master password — browsers and workstations authenticating with a
-GitHub identity instead of the shared secret.
 
 Failed attempts trip a brute-force lockout keyed on client IP.
 Set `POCKETTERM_TRUST_PROXY=1` so it keys on the client IP
@@ -203,5 +185,8 @@ the proxy — reverse proxy or `tailscale serve` — appends to `X-Forwarded-For
 (only when that proxy is the sole way in — otherwise attackers forge the
 header and dodge the lockout).
 
-Isolation of the password from the spawned sessions is best-effort and not
-hardened at the moment, but there is room for improvement.
+Isolation of the workstation password from the spawned sessions is best-effort and not
+hardened, but there is room for improvement.
+
+**Planned:** browsers and workstations authenticating with a
+GitHub identity instead of the shared secret.
