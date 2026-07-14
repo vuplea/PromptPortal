@@ -595,13 +595,13 @@ function disarm() {
   setShift(false);
 }
 
-const ARROWS = { '←': 'D', '↑': 'A', '↓': 'B', '→': 'C' };
+const CURSOR = { '←': 'D', '↑': 'A', '↓': 'B', '→': 'C', Home: 'H', End: 'F' }; // CSI 1 ; <mod> <letter>
 const TILDES = { PgUp: '5', PgDn: '6', Ins: '2' }; // the CSI <n> ~ keys
 
 function sendKey(label, seq) {
   const modifier = 1 + (shiftArmed ? 1 : 0) + (altArmed ? 2 : 0) + (ctrlArmed ? 4 : 0);
-  if (ARROWS[label] && modifier > 1) {
-    seq = `\x1b[1;${modifier}${ARROWS[label]}`; // ctrl+arrow: word jump etc.
+  if (CURSOR[label] && modifier > 1) {
+    seq = `\x1b[1;${modifier}${CURSOR[label]}`; // ctrl+arrow word jump, ctrl+home buffer top, etc.
     disarm();
   } else if (TILDES[label] && modifier > 1) {
     seq = `\x1b[${TILDES[label]};${modifier}~`;
