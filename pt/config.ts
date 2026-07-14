@@ -70,4 +70,3 @@ export function resolveExistingDir(dir: string): string {
   if (!isDir) throw new CliError(`directory does not exist: ${resolved}`);
   return resolved;
 }
-

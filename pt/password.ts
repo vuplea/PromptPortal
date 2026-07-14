@@ -72,4 +72,3 @@ function verifyPassword(password: string): Promise<void> {
     };
   });
 }
-

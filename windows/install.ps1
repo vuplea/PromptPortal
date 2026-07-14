@@ -73,18 +73,22 @@ Write-Host "Hub:       $HubUrl$(if ($InstallHub) { ' (installed here)' })"
 
 # --- Helpers -------------------------------------------------------------------
 
-# Build one self-contained executable to a staging name first: a failed build
-# must tear nothing down. The running processes stop only once a good binary
-# exists — they must stop then, since Windows locks a running image against
-# overwrite. Stopping the scheduled task is not enough: it terminates the
-# conhost it started, which can orphan the child — and a process started by
-# hand has no task at all.
-function Build-Executable([string]$EntryPoint, [string]$Name, [string]$TaskName, [string]$StopNote) {
+# Compile one self-contained executable to its staging name ($Name-new.exe).
+# Staging first: a failed build must tear nothing down.
+function New-StagedExecutable([string]$EntryPoint, [string]$Name) {
   Write-Host "`nBuilding $Name.exe..."
   bun build --compile $EntryPoint --outfile "$dist\$Name-new.exe"
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$dist\$Name-new.exe")) {
     throw "Build failed; see output above."
   }
+}
+
+# Swap a staged build in. Whatever runs the old binary stops only now, once a
+# good one exists — it must stop then, since Windows locks a running image
+# against overwrite. Stopping the scheduled task is not enough: it terminates
+# the conhost it started, which can orphan the child — and a process started
+# by hand has no task at all.
+function Install-StagedExecutable([string]$Name, [string]$TaskName, [string]$StopNote) {
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   $running = @(Get-Process $Name -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$dist\$Name.exe" })
   if ($running) {
@@ -141,21 +145,26 @@ function Invoke-Utf8Pipe([string[]]$Lines, [string]$Exe, [string[]]$ExeArgs) {
   try { $Lines | & $Exe @ExeArgs } finally { $OutputEncoding = $prevEncoding }
 }
 
-# --- Build the executables -----------------------------------------------------
-# Both builds happen before any state changes, so a failed build leaves the
-# machine exactly as it was.
+# --- Build the executables (to staging names) ----------------------------------
+# Builds and password entry both come before anything stops or swaps, so a
+# failed build or a cancelled prompt leaves the machine exactly as it was.
 if ($InstallHub) {
-  Build-Executable "$repo\server.ts" 'hub' $hubTask ''
+  # server.ts embeds the @xterm assets out of node_modules, which a fresh
+  # clone does not have (bun build does not install; pt.exe needs no packages).
+  bun install --frozen-lockfile --cwd $repo
+  if ($LASTEXITCODE -ne 0) { throw 'bun install failed; see output above.' }
+  New-StagedExecutable "$repo\server.ts" 'hub'
 }
-Build-Executable "$repo\pt\main.ts" 'pt' $launcherTask ' (open sessions end with them)'
+New-StagedExecutable "$repo\pt\main.ts" 'pt'
 
 # --- Install the hub -----------------------------------------------------------
 # The hub must be serving before the workstation half below, whose
 # set-password verifies the workstation password against it.
 if ($InstallHub) {
-  # Both hub secrets go to Credential Manager (hub.exe set-password). Prompted
-  # here rather than by hub.exe so the workstation password is asked for once
-  # and reused for the workstation registration below.
+  # Both hub secrets go to Credential Manager. Prompted here rather than by
+  # hub.exe so the workstation password is asked for once and reused for the
+  # workstation registration below — and stored through the staged binary, so
+  # bad input aborts while the old hub still runs untouched.
   if (-not $WebAccessPassword) {
     $WebAccessPassword = Read-Secret 'Web-access password (browsers sign in with it; Enter keeps one stored before)'
   }
@@ -163,15 +172,20 @@ if ($InstallHub) {
     $Password = Read-Secret 'Workstation password (workstations register with it; Enter keeps one stored before)'
   }
   Write-Host 'Storing the hub passwords in Credential Manager...'
-  Invoke-Utf8Pipe @($WebAccessPassword, $Password) "$dist\hub.exe" @('set-password')
+  Invoke-Utf8Pipe @($WebAccessPassword, $Password) "$dist\hub-new.exe" @('set-password')
   if ($LASTEXITCODE -ne 0) { throw 'Failed to store the hub passwords; see output above.' }
+
+  Install-StagedExecutable 'hub' $hubTask ''
 
   # Profiles and quick commands persist here (the compose deployment's
   # hub-data volume, as a directory). A scheduled task has no per-process
-  # environment channel, so the data dir and port ride the command line.
+  # environment channel, so the settings ride the command line — including
+  # --host, so a stray user-level HOST variable can never flip this headless
+  # plain-HTTP hub onto the network.
   $hubData = "$env:LOCALAPPDATA\PocketTerminal\hub-data"
   New-Item -ItemType Directory -Force -Path $hubData | Out-Null
-  Register-HeadlessLogonTask $hubTask "`"$dist\hub.exe`" --port $HubPort --data `"$hubData`"" 'PocketTerminal hub'
+  $hubCommand = "`"$dist\hub.exe`" --host 127.0.0.1 --port $HubPort --data `"$hubData`""
+  Register-HeadlessLogonTask $hubTask $hubCommand 'PocketTerminal hub'
 
   Start-ScheduledTask -TaskName $hubTask
   # The task runs the hub headless, so a startup error would die invisibly;
@@ -189,10 +203,15 @@ if ($InstallHub) {
     Start-Sleep -Milliseconds 500
   }
   if (-not $hubUp) {
-    throw "The hub did not come up. Run `"$dist\hub.exe`" --port $HubPort --data `"$hubData`" in a terminal to see the error."
+    throw "The hub did not come up. Run $hubCommand in a terminal to see the error."
   }
   Write-Host "The hub is up on http://127.0.0.1:$HubPort."
+} elseif (Get-ScheduledTask -TaskName $hubTask -ErrorAction SilentlyContinue) {
+  Write-Warning ("a '$hubTask' task from an earlier -InstallHub run is still registered and keeps serving at logon; " +
+    "remove it with: Unregister-ScheduledTask '$hubTask' -Confirm:`$false")
 }
+
+Install-StagedExecutable 'pt' $launcherTask ' (open sessions end with them)'
 
 # --- Persist configuration ------------------------------------------------------
 # Non-secret settings go to user environment variables; the scheduled tasks and
