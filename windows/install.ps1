@@ -7,6 +7,8 @@
   build hub.exe and register the hub itself as a background logon task, so
   this machine serves the UI and brokers browsers to workstations. With
   -Uninstall, remove everything a previous run installed on this machine.
+  With -Update, rebuild the executables from the current repo and swap them
+  in, leaving every stored setting untouched.
 
 .DESCRIPTION
   After this runs, `pt` in any terminal hosts a session that is also
@@ -39,6 +41,13 @@
   # credentials, the user environment variables, the PATH entry, and the
   # Windows Terminal profile. The built exes and the hub-data directory (saved
   # profiles and quick commands) are left in place.
+
+.EXAMPLE
+  .\install.ps1 -Update
+  # rebuilds pt.exe (and hub.exe when the hub is installed here) from the
+  # current repo and restarts the tasks, touching no passwords, environment
+  # variables, PATH entry, or Windows Terminal profile. Needs no -HubUrl: the
+  # stored configuration already has it. Open sessions end with the swap.
 #>
 param(
   [string]$HubUrl,
@@ -47,7 +56,8 @@ param(
   [switch]$InstallHub,
   [ValidateRange(1, 65535)][int]$HubPort = 8080,
   [string]$WebAccessPassword,
-  [switch]$Uninstall
+  [switch]$Uninstall,
+  [switch]$Update
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,6 +85,31 @@ function New-StagedExecutable([string]$EntryPoint, [string]$Name) {
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$dist\$Name-new.exe")) {
     throw "Build failed; see output above."
   }
+}
+
+# Compile the executables to their staging names, verifying the one build
+# prerequisite first: pt (the workstation launcher and its session hosts), and
+# the hub with -Hub. Shared by the install and the update, so both build under
+# the same Bun floor and neither drifts. Staging first means a failed build
+# tears nothing down.
+function Build-StagedExecutables([bool]$Hub, [bool]$Launcher = $true) {
+  $null = (Get-Command bun -ErrorAction Stop).Source
+  # Bun.spawn's `terminal` option (the pty every session runs in) needs 1.3.14,
+  # and `bun build --compile` embeds the running Bun as the exe's runtime — an
+  # old Bun would yield a pt.exe whose sessions die at spawn. Prerelease
+  # suffixes (1.3.16-canary.…) are not [version]-castable; strip them.
+  $bunVersion = [version]((bun --version) -replace '[-+].*$', '')
+  if ($bunVersion -lt [version]'1.3.14') {
+    throw "Bun $bunVersion is too old; pt needs >= 1.3.14 (bun upgrade)"
+  }
+  if ($Hub) {
+    # server.ts embeds the @xterm assets out of node_modules, which a fresh
+    # clone lacks (bun build does not install; pt.exe needs no packages).
+    bun install --frozen-lockfile --cwd $repo
+    if ($LASTEXITCODE -ne 0) { throw 'bun install failed; see output above.' }
+    New-StagedExecutable "$repo\server.ts" 'hub'
+  }
+  if ($Launcher) { New-StagedExecutable "$repo\pt\main.ts" 'pt' }
 }
 
 # Stop every running build of $Name — the launcher, its session hosts, or the
@@ -223,8 +258,99 @@ function Invoke-Uninstall {
   Write-Host "data in $env:LOCALAPPDATA\PocketTerminal\hub-data."
 }
 
+# Prove a headless task's process came up and stayed up. The task runs it with
+# no window, so a startup error (bad config) dies invisibly — the only signal
+# is the process holding past the first couple of seconds. $Hint is the command
+# to run by hand to see the error.
+function Wait-ProcessHolds([string]$Name, [string]$ImagePath, [string]$What, [string]$Hint) {
+  $deadline = (Get-Date).AddSeconds(15)
+  while ((Get-Date) -lt $deadline) {
+    $proc = Get-Process $Name -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $ImagePath } | Select-Object -First 1
+    if ($proc) {
+      Start-Sleep -Seconds 2   # a config error exits within moments of starting
+      if (-not $proc.HasExited) { return }
+    }
+    Start-Sleep -Milliseconds 500
+  }
+  throw "The $What did not come up. Run $Hint in a terminal to see the error."
+}
+
+# Prove the headless hub came up: it must both answer HTTP and still be
+# running. Any HTTP status counts — an unauthenticated request earns a 401 from
+# a healthy hub. The answer alone is not proof, though: with the port already
+# taken, the hub dies at bind time while the other service answers the probe —
+# so require the hub process to hold too. $Hint is the command to run by hand.
+function Wait-HubHolds([int]$Port, [string]$Hint) {
+  $deadline = (Get-Date).AddSeconds(15)
+  while ((Get-Date) -lt $deadline) {
+    $answered = $false
+    try {
+      Invoke-WebRequest -Uri "http://127.0.0.1:$Port/" -UseBasicParsing -TimeoutSec 2 | Out-Null
+      $answered = $true
+    } catch {
+      if ($_.Exception.Response) { $answered = $true }
+    }
+    if ($answered) {
+      Start-Sleep -Seconds 2   # a bind failure kills the hub within moments
+      if (@(Get-Process hub -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$dist\hub.exe" }).Count -gt 0) {
+        return
+      }
+      throw ("Port $Port answers but $dist\hub.exe is not running — another service likely holds the port " +
+        "(pick a different -HubPort), or the hub crashed at startup. Run $Hint in a terminal to see the error.")
+    }
+    Start-Sleep -Milliseconds 500
+  }
+  throw "The hub did not come up. Run $Hint in a terminal to see the error."
+}
+
+# Rebuild the executables from the current repo and swap them in, leaving every
+# stored setting untouched: no passwords, environment variables, PATH entry, or
+# Windows Terminal profile are read or written. Updates whichever halves are
+# installed here — the workstation launcher, and the hub too when its task is
+# registered — using the same staged-build discipline and come-up checks a full
+# install uses. Needs no -HubUrl: the config the tasks already carry has it.
+function Invoke-Update {
+  $launcherInstalled = [bool](Get-ScheduledTask -TaskName $launcherTask -ErrorAction SilentlyContinue)
+  $hubInstalled = [bool](Get-ScheduledTask -TaskName $hubTask -ErrorAction SilentlyContinue)
+  if (-not $launcherInstalled -and -not $hubInstalled) {
+    throw 'Nothing to update: no PocketTerminal launcher or hub is installed on this machine. Run install.ps1 with -HubUrl (or -InstallHub) first.'
+  }
+  Write-Host "Updating PocketTerminal in place (rebuilding executables)..."
+  Write-Host "Repo: $repo"
+
+  # Build only the halves installed here, to staging names so a failed build
+  # tears nothing down.
+  Build-StagedExecutables $hubInstalled $launcherInstalled
+
+  # Swap and verify in the same order a full install uses: the hub first (the
+  # workstation half's set-password normally verifies against it), then the
+  # launcher. The port and a runnable hint come from the task the swap keeps.
+  if ($hubInstalled) {
+    $hubArgs = (Get-ScheduledTask -TaskName $hubTask).Actions[0].Arguments
+    $hubPort = if ($hubArgs -match '--port\s+(\d+)') { [int]$Matches[1] } else { $HubPort }
+    Install-StagedExecutable 'hub' $hubTask ''
+    Start-ScheduledTask -TaskName $hubTask
+    Wait-HubHolds $hubPort ($hubArgs -replace '^\s*--headless\s+', '')
+    Write-Host "The hub is up on http://127.0.0.1:$hubPort."
+  }
+  if ($launcherInstalled) {
+    Install-StagedExecutable 'pt' $launcherTask ' (open sessions end with them)'
+    Start-ScheduledTask -TaskName $launcherTask
+    Wait-ProcessHolds 'pt' "$dist\pt.exe" 'launcher' "`"$dist\pt.exe`" launcher"
+  }
+  Write-Host "`nDone. Rebuilt and restarted. Host a session from any terminal with:  pt"
+}
+
 if ($Uninstall) {
   Invoke-Uninstall
+  return
+}
+
+if ($Update) {
+  if ($HubUrl -or $InstallHub) {
+    throw '-Update rebuilds the installed executables in place and reads no new settings; run it on its own, or drop -Update to change configuration with -HubUrl/-InstallHub.'
+  }
+  Invoke-Update
   return
 }
 
@@ -236,18 +362,11 @@ if ($NodeName -notmatch '^[A-Za-z0-9_.-]{1,64}$') {
   throw "Invalid -NodeName '$NodeName' (allowed: letters, digits, _ . - ; max 64 chars)"
 }
 if (-not $HubUrl) {
-  if (-not $InstallHub) { throw '-HubUrl is required (or pass -InstallHub to host the hub on this machine)' }
+  if (-not $InstallHub) { throw '-HubUrl is required (or -InstallHub to host the hub on this machine, or -Update to rebuild an existing install without changing its configuration)' }
   $HubUrl = "http://127.0.0.1:$HubPort"
 }
 if ($WebAccessPassword -and -not $InstallHub) {
   throw '-WebAccessPassword configures the hub; it needs -InstallHub'
-}
-$null = (Get-Command bun -ErrorAction Stop).Source
-# Bun.spawn's `terminal` option (the pty every session runs in) needs 1.3.14.
-# Prerelease suffixes (1.3.16-canary.…) are not [version]-castable; strip them.
-$bunVersion = [version]((bun --version) -replace '[-+].*$', '')
-if ($bunVersion -lt [version]'1.3.14') {
-  throw "Bun $bunVersion is too old; pt needs >= 1.3.14 (bun upgrade)"
 }
 
 Write-Host "Repo:      $repo"
@@ -269,14 +388,7 @@ foreach ($name in $passwordVars) {
 # --- Build the executables (to staging names) ----------------------------------
 # Builds and password entry both come before anything stops or swaps, so a
 # failed build or a cancelled prompt leaves the machine exactly as it was.
-if ($InstallHub) {
-  # server.ts embeds the @xterm assets out of node_modules, which a fresh
-  # clone does not have (bun build does not install; pt.exe needs no packages).
-  bun install --frozen-lockfile --cwd $repo
-  if ($LASTEXITCODE -ne 0) { throw 'bun install failed; see output above.' }
-  New-StagedExecutable "$repo\server.ts" 'hub'
-}
-New-StagedExecutable "$repo\pt\main.ts" 'pt'
+Build-StagedExecutables $InstallHub
 
 # --- Install the hub -----------------------------------------------------------
 # The hub must be serving before the workstation half below, whose
@@ -310,34 +422,8 @@ if ($InstallHub) {
 
   Start-ScheduledTask -TaskName $hubTask
   # The task runs the hub headless, so a startup error would die invisibly;
-  # prove it answers HTTP before the workstation half depends on it. Any
-  # status counts — an unauthenticated request earns a 401 from a healthy
-  # hub. The HTTP answer alone is not proof, though: with the port already
-  # taken, the hub dies at bind time while the other service answers the
-  # probe — so the hub process must also hold, like the launcher check below.
-  $deadline = (Get-Date).AddSeconds(15)
-  $hubUp = $false
-  while ((Get-Date) -lt $deadline) {
-    $answered = $false
-    try {
-      Invoke-WebRequest -Uri "http://127.0.0.1:$HubPort/" -UseBasicParsing -TimeoutSec 2 | Out-Null
-      $answered = $true
-    } catch {
-      if ($_.Exception.Response) { $answered = $true }
-    }
-    if ($answered) {
-      Start-Sleep -Seconds 2   # a bind failure kills the hub within moments
-      if (@(Get-Process hub -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$dist\hub.exe" }).Count -gt 0) {
-        $hubUp = $true; break
-      }
-      throw ("Port $HubPort answers but $dist\hub.exe is not running — another service likely holds the port " +
-        "(pick a different -HubPort), or the hub crashed at startup. Run $hubCommand in a terminal to see the error.")
-    }
-    Start-Sleep -Milliseconds 500
-  }
-  if (-not $hubUp) {
-    throw "The hub did not come up. Run $hubCommand in a terminal to see the error."
-  }
+  # prove it answers HTTP and holds before the workstation half depends on it.
+  Wait-HubHolds $HubPort $hubCommand
   Write-Host "The hub is up on http://127.0.0.1:$HubPort."
 } elseif (Get-ScheduledTask -TaskName $hubTask -ErrorAction SilentlyContinue) {
   Write-Warning ("a '$hubTask' task from an earlier -InstallHub run is still registered and keeps serving at logon; " +
@@ -402,19 +488,7 @@ Start-ScheduledTask -TaskName $launcherTask
 # die invisibly; prove it came up and stayed up before declaring success. The
 # password and hub URL were already proven against the hub by set-password
 # above, so a launcher that holds is a launcher that registers.
-$deadline = (Get-Date).AddSeconds(15)
-$up = $false
-while ((Get-Date) -lt $deadline) {
-  $proc = Get-Process pt -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$dist\pt.exe" } | Select-Object -First 1
-  if ($proc) {
-    Start-Sleep -Seconds 2   # a config error exits within moments of starting
-    if (-not $proc.HasExited) { $up = $true; break }
-  }
-  Start-Sleep -Milliseconds 500
-}
-if (-not $up) {
-  throw "The launcher did not come up. Run `"$dist\pt.exe`" launcher in a terminal to see the error."
-}
+Wait-ProcessHolds 'pt' "$dist\pt.exe" 'launcher' "`"$dist\pt.exe`" launcher"
 Write-Host "`nDone. The launcher is running. Host a session from any terminal with:  pt"
 Write-Host "In Windows Terminal, the 'PocketTerminal' profile opens a connected session."
 Write-Host "Closing a session's window ends that session everywhere."
