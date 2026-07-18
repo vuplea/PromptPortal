@@ -23,6 +23,19 @@ import manifestFile from './public/manifest.webmanifest' with { type: 'file' };
 import icon192 from './public/icon-192.png' with { type: 'file' };
 import icon512 from './public/icon-512.png' with { type: 'file' };
 import splashPng from './public/splash.png' with { type: 'file' };
+// Per-device iOS launch images: Safari shows a splash only when an image
+// matches the device's exact resolution (index.html media-queries each).
+import sp0 from './public/splash/splash-1290x2796.png' with { type: 'file' };
+import sp1 from './public/splash/splash-1284x2778.png' with { type: 'file' };
+import sp2 from './public/splash/splash-1179x2556.png' with { type: 'file' };
+import sp3 from './public/splash/splash-1170x2532.png' with { type: 'file' };
+import sp4 from './public/splash/splash-1125x2436.png' with { type: 'file' };
+import sp5 from './public/splash/splash-1242x2688.png' with { type: 'file' };
+import sp6 from './public/splash/splash-828x1792.png' with { type: 'file' };
+import sp7 from './public/splash/splash-750x1334.png' with { type: 'file' };
+import sp8 from './public/splash/splash-2048x2732.png' with { type: 'file' };
+import sp9 from './public/splash/splash-1668x2388.png' with { type: 'file' };
+import sp10 from './public/splash/splash-1640x2360.png' with { type: 'file' };
 import xtermJs from '@xterm/xterm/lib/xterm.js' with { type: 'file' };
 import xtermJsMap from '@xterm/xterm/lib/xterm.js.map' with { type: 'file' };
 import xtermCss from '@xterm/xterm/css/xterm.css' with { type: 'file' };
@@ -90,6 +103,17 @@ const STATIC_FILES: Record<string, [string, string]> = {
   '/icon-192.png': [icon192, 'image/png'],
   '/icon-512.png': [icon512, 'image/png'],
   '/splash.png': [splashPng, 'image/png'],
+  '/splash/splash-1290x2796.png': [sp0, 'image/png'],
+  '/splash/splash-1284x2778.png': [sp1, 'image/png'],
+  '/splash/splash-1179x2556.png': [sp2, 'image/png'],
+  '/splash/splash-1170x2532.png': [sp3, 'image/png'],
+  '/splash/splash-1125x2436.png': [sp4, 'image/png'],
+  '/splash/splash-1242x2688.png': [sp5, 'image/png'],
+  '/splash/splash-828x1792.png': [sp6, 'image/png'],
+  '/splash/splash-750x1334.png': [sp7, 'image/png'],
+  '/splash/splash-2048x2732.png': [sp8, 'image/png'],
+  '/splash/splash-1668x2388.png': [sp9, 'image/png'],
+  '/splash/splash-1640x2360.png': [sp10, 'image/png'],
   '/vendor/xterm.js': [xtermJs, 'text/javascript'],
   '/vendor/xterm.js.map': [xtermJsMap, 'application/json'],
   '/vendor/xterm.css': [xtermCss, 'text/css'],
