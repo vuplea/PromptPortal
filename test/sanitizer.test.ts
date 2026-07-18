@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { OutputSanitizer } from '../pt/session';
+import { OutputSanitizer } from '../promptportal/session';
 
 // The four ConPTY terminal-mode requests the sanitizer must strip:
 // win32-input-mode and focus-event reporting, set and reset.

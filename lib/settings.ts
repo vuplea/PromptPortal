@@ -59,15 +59,15 @@ const HUB_PASSWORDS = [
   {
     key: 'webaccess',
     label: 'web-access',
-    envVar: 'POCKETTERM_WEBACCESS_PASSWORD',
-    target: 'PocketTerminalHub/webaccess',
+    envVar: 'PROMPTPORTAL_WEBACCESS_PASSWORD',
+    target: 'PromptPortalHub/webaccess',
     promptLabel: 'Web-access password (browsers sign in with it)',
   },
   {
     key: 'workstation',
     label: 'workstation',
-    envVar: 'POCKETTERM_WORKSTATION_PASSWORD',
-    target: 'PocketTerminalHub/workstation',
+    envVar: 'PROMPTPORTAL_WORKSTATION_PASSWORD',
+    target: 'PromptPortalHub/workstation',
     promptLabel: 'Workstation password (workstations register with it)',
   },
 ] as const;
@@ -112,7 +112,7 @@ export function resolveHubPasswords(): { webaccess: string; workstation: string;
 export async function setHubPasswords(): Promise<void> {
   if (!isWindows) {
     throw new CliError('set-password uses Windows Credential Manager; on this platform set'
-      + ' POCKETTERM_WEBACCESS_PASSWORD and POCKETTERM_WORKSTATION_PASSWORD instead');
+      + ' PROMPTPORTAL_WEBACCESS_PASSWORD and PROMPTPORTAL_WORKSTATION_PASSWORD instead');
   }
   const interactive = process.stdin.isTTY === true;
   const lines = interactive ? [] : (await Bun.stdin.text()).split(/\r?\n/);

@@ -6,5 +6,5 @@
 export class ClientError extends Error {}
 
 // A CLI error meant for the user, printed without a stack trace — thrown by
-// the pt commands and the hub's own CLI (set-password, flag parsing).
+// the promptportal commands and the hub's own CLI (set-password, flag parsing).
 export class CliError extends Error {}

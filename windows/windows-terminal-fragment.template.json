@@ -1,10 +1,10 @@
 {
-  "// note": "install.ps1 resolves the commandline placeholder to the real pt.exe path and writes this file to %LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\\PocketTerminal\\pocketterminal.json (do the same to install by hand).",
+  "// note": "install.ps1 resolves the commandline placeholder to the real promptportal.exe path and writes this file to %LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\\PromptPortal\\promptportal.json (do the same to install by hand).",
   "profiles": [
     {
-      "name": "PocketTerminal",
-      "commandline": "\"__PT__\"",
-      "icon": "💻",
+      "name": "PromptPortal",
+      "commandline": "\"__PROMPTPORTAL__\"",
+      "icon": "__ICON__",
       "closeOnExit": "graceful",
       "startingDirectory": "%USERPROFILE%"
     }

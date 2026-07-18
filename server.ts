@@ -25,9 +25,9 @@ import addonFitJsMap from '@xterm/addon-fit/lib/addon-fit.js.map' with { type: '
 
 // The hub. It serves the browser UI, authenticates clients, and brokers
 // between browser sockets and the terminal workstations registered with it.
-// It hosts no terminals itself: every session is a `pt` process on a
+// It hosts no terminals itself: every session is a `promptportal` process on a
 // workstation that dials in over its own outbound WebSocket, and each
-// workstation runs a small `pt launcher` so sessions can be started from
+// workstation runs a small `promptportal launcher` so sessions can be started from
 // here — including the `server` workstation container deployed beside the
 // hub (see docker-compose.yml).
 
@@ -51,18 +51,18 @@ try {
   process.exit(1);
 }
 
-const PORT = cli.port ?? (Number(process.env.POCKETTERM_PORT) || 8080);
+const PORT = cli.port ?? (Number(process.env.PROMPTPORTAL_PORT) || 8080);
 // Loopback by default: the hub speaks plain HTTP and Basic auth resends the
 // password with every request, so a reachable-from-the-network listener is an
-// explicit decision (--host / POCKETTERM_HOST=0.0.0.0) to pair with TLS in
+// explicit decision (--host / PROMPTPORTAL_HOST=0.0.0.0) to pair with TLS in
 // front. The hub container sets it (Dockerfile.hub) and publishes the port
 // loopback-bound instead (docker-compose.yml).
-const HOST = cli.host || process.env.POCKETTERM_HOST || '127.0.0.1';
-const DATA_DIR = cli.data || process.env.POCKETTERM_DATA || path.join(process.cwd(), 'data');
-const TRUST_PROXY = ['1', 'true'].includes(process.env.POCKETTERM_TRUST_PROXY ?? '');
+const HOST = cli.host || process.env.PROMPTPORTAL_HOST || '127.0.0.1';
+const DATA_DIR = cli.data || process.env.PROMPTPORTAL_DATA || path.join(process.cwd(), 'data');
+const TRUST_PROXY = ['1', 'true'].includes(process.env.PROMPTPORTAL_TRUST_PROXY ?? '');
 
 // The two secrets: browsers present the web-access password via Basic auth
-// (username "pocketterm"); workstation session and launcher sockets present
+// (username "promptportal"); workstation session and launcher sockets present
 // the workstation password. See lib/auth.ts.
 const passwords = resolveHubPasswords();
 if (passwords.problems.length > 0) {
@@ -221,7 +221,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
 // The brute-force lockout keys on client IP. Behind a reverse proxy every
 // request arrives from the proxy's address, so one attacker would lock out
-// everyone; POCKETTERM_TRUST_PROXY says the proxy is trusted to append the real
+// everyone; PROMPTPORTAL_TRUST_PROXY says the proxy is trusted to append the real
 // client IP to X-Forwarded-For.
 let warnedForwarded = false;
 function clientIp(req: Request): string {
@@ -230,7 +230,7 @@ function clientIp(req: Request): string {
     if (forwarded) return forwarded.split(',').pop()!.trim();
   } else if (!warnedForwarded && forwarded) {
     warnedForwarded = true;
-    console.warn('auth: requests carry X-Forwarded-For but POCKETTERM_TRUST_PROXY is unset;'
+    console.warn('auth: requests carry X-Forwarded-For but PROMPTPORTAL_TRUST_PROXY is unset;'
       + ' lockouts key on the proxy address, so one attacker locks out everyone');
   }
   return server.requestIP(req)?.address ?? 'unknown';
@@ -243,8 +243,8 @@ function authFailure(result: { status: 401 | 429; retryAfter?: number }): Respon
       'Content-Type': 'text/plain',
     });
   }
-  return respond(401, 'Authentication required. Sign in as "pocketterm" with the web-access password.', {
-    'WWW-Authenticate': 'Basic realm="PocketTerminal (username: pocketterm)", charset="UTF-8"',
+  return respond(401, 'Authentication required. Sign in as "promptportal" with the web-access password.', {
+    'WWW-Authenticate': 'Basic realm="PromptPortal (username: promptportal)", charset="UTF-8"',
     'Content-Type': 'text/plain',
   });
 }
@@ -439,7 +439,7 @@ const server = Bun.serve<WsData>({
 // Drop peers that vanished without a close frame (phone lost signal, the
 // workstation slept) so nothing accumulates dead sockets. Every peer also
 // gets a {t:'ping'} frame: WS-level pings are answered below the JS layer on
-// both ends, so only an application frame lets a workstation (pt/link.ts) or
+// both ends, so only an application frame lets a workstation (promptportal/link.ts) or
 // a page (public/app.js) tell a silent hub from a dead link.
 setInterval(() => {
   for (const ws of liveSockets) {
@@ -460,7 +460,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   });
 }
 
-console.log(`PocketTerminal hub listening on http://${HOST}:${PORT} (data: ${path.resolve(DATA_DIR)})`);
+console.log(`PromptPortal hub listening on http://${HOST}:${PORT} (data: ${path.resolve(DATA_DIR)})`);
 
 // The hub itself speaks plain HTTP, and Basic auth resends the password with
 // every request — so a non-loopback listener is only safe with TLS
@@ -470,5 +470,5 @@ console.log(`PocketTerminal hub listening on http://${HOST}:${PORT} (data: ${pat
 if (!['127.0.0.1', '::1', 'localhost'].includes(HOST)) {
   console.warn('hub: listening on a non-loopback address over plain HTTP — every request'
     + ' carries the password, so TLS must terminate in front (reverse proxy or VPN);'
-    + ' set POCKETTERM_HOST=127.0.0.1 if a local proxy is the only way in');
+    + ' set PROMPTPORTAL_HOST=127.0.0.1 if a local proxy is the only way in');
 }

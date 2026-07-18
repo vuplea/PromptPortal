@@ -9,8 +9,8 @@ function basic(user: string, pass: string): string {
   return 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64');
 }
 
-const GOOD = basic('pocketterm', PASSWORD);
-const BAD = basic('pocketterm', 'wrong');
+const GOOD = basic('promptportal', PASSWORD);
+const BAD = basic('promptportal', 'wrong');
 
 afterEach(() => setSystemTime());
 
@@ -37,7 +37,7 @@ describe('credentials', () => {
   test('the passwords do not cross channels', () => {
     const auth = new Auth(PASSWORD, WORKSTATION_PASSWORD);
     expect(auth.checkPassword(Buffer.from(PASSWORD), '1.2.3.4')).toEqual({ ok: false, status: 401 });
-    expect(auth.check(basic('pocketterm', WORKSTATION_PASSWORD), '1.2.3.4')).toEqual({ ok: false, status: 401 });
+    expect(auth.check(basic('promptportal', WORKSTATION_PASSWORD), '1.2.3.4')).toEqual({ ok: false, status: 401 });
   });
 });
 

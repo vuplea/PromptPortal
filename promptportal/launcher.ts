@@ -6,15 +6,15 @@ import { maintainLink } from './link';
 import type { HostContext } from './host';
 import { openHostWindow } from './window';
 
-// `pt launcher` — the one resident process per workstation, and the only
+// `promptportal launcher` — the one resident process per workstation, and the only
 // reason one exists: starting sessions from the phone. It keeps a single
 // outbound WebSocket to the hub and answers create requests by spawning a
-// `pt` host — in a terminal window on a Windows desktop (the window is the
+// `promptportal` host — in a terminal window on a Windows desktop (the window is the
 // session), headless in the workstation container. It relays no terminal
 // traffic and owns nothing: stopping it strands no sessions.
 
-// Compiled (`bun build --compile`, the installed pt.exe) the executable is
-// the program; under `bun pt/main.ts` in development the script path must be
+// Compiled (`bun build --compile`, the installed promptportal.exe) the executable is
+// the program; under `bun promptportal/main.ts` in development the script path must be
 // passed along.
 const COMPILED = !/^bun(\.exe)?$/i.test(path.basename(process.execPath));
 
@@ -53,7 +53,7 @@ function create(msg: Msg, ctx: HostContext): void {
   const cwd = resolveExistingDir(msg.cwd || '');
 
   // The spec carries the session's full context, so a spawned host registers
-  // with exactly the hub that asked for it — never with whatever POCKETTERM_*
+  // with exactly the hub that asked for it — never with whatever PROMPTPORTAL_*
   // values happen to sit in an inherited environment.
   const spec = Buffer.from(JSON.stringify({
     id: msg.id,
@@ -77,7 +77,7 @@ function create(msg: Msg, ctx: HostContext): void {
   // password goes over stdin rather than the environment.
   const child = Bun.spawn({
     cmd: [process.execPath, ...hostArgs(spec)],
-    env: { ...process.env, POCKETTERM_PASSWORD_STDIN: '1' },
+    env: { ...process.env, PROMPTPORTAL_PASSWORD_STDIN: '1' },
     stdin: 'pipe',
     stdout: 'inherit',
     stderr: 'inherit',

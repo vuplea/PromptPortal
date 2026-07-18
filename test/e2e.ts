@@ -16,11 +16,11 @@ import { BROWSER_PROTOCOL } from '../lib/protocol';
 const REPO = path.resolve(import.meta.dir, '..');
 const PORT = 18000 + (process.pid % 1000);
 const BASE = `http://127.0.0.1:${PORT}`;
-const PASS = 'pt-e2e-not-a-real-secret'; // web access
-const NODE_PASS = 'pt-e2e-workstation-secret'; // workstation registration
+const PASS = 'promptportal-e2e-not-a-real-secret'; // web access
+const NODE_PASS = 'promptportal-e2e-workstation-secret'; // workstation registration
 const NODE = 'e2e';
 const CWD = os.tmpdir();
-const AUTH = 'Basic ' + Buffer.from(`pocketterm:${PASS}`).toString('base64');
+const AUTH = 'Basic ' + Buffer.from(`promptportal:${PASS}`).toString('base64');
 
 const children: Bun.Subprocess[] = [];
 let dataDir = '';
@@ -64,8 +64,8 @@ function spawn(label: string, args: string[], env: Record<string, string> = {}):
 
 function spawnHost(label: string): Bun.Subprocess {
   const spec = Buffer.from(JSON.stringify({ label, cwd: CWD })).toString('base64url');
-  return spawn(label, ['pt/main.ts', 'run', '--spec', spec], {
-    POCKETTERM_HUB_URL: BASE, POCKETTERM_WORKSTATION_PASSWORD: NODE_PASS, POCKETTERM_NODE_NAME: NODE,
+  return spawn(label, ['promptportal/main.ts', 'run', '--spec', spec], {
+    PROMPTPORTAL_HUB_URL: BASE, PROMPTPORTAL_WORKSTATION_PASSWORD: NODE_PASS, PROMPTPORTAL_NODE_NAME: NODE,
   });
 }
 
@@ -118,10 +118,10 @@ async function attachViewer(id: string) {
 }
 
 // ------------------------------------------------------------------- hub
-dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-e2e-'));
+dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'promptportal-e2e-'));
 spawn('hub', ['server.ts'], {
-  POCKETTERM_PORT: String(PORT), POCKETTERM_HOST: '127.0.0.1', POCKETTERM_WEBACCESS_PASSWORD: PASS,
-  POCKETTERM_WORKSTATION_PASSWORD: NODE_PASS, POCKETTERM_DATA: dataDir,
+  PROMPTPORTAL_PORT: String(PORT), PROMPTPORTAL_HOST: '127.0.0.1', PROMPTPORTAL_WEBACCESS_PASSWORD: PASS,
+  PROMPTPORTAL_WORKSTATION_PASSWORD: NODE_PASS, PROMPTPORTAL_DATA: dataDir,
 });
 await until('hub up', 10000, async () => (await fetch(BASE, { headers: { Authorization: AUTH } })).ok);
 console.log('OK hub up');
@@ -165,8 +165,8 @@ await until('shell-exited session gone from the list', 5000, goneFromList(exitSe
 console.log('OK shell exit ends the session everywhere');
 
 // --------------------------------------------------------------- launcher
-spawn('launcher', ['pt/main.ts', 'launcher'], {
-  POCKETTERM_HUB_URL: BASE, POCKETTERM_WORKSTATION_PASSWORD: NODE_PASS, POCKETTERM_NODE_NAME: NODE,
+spawn('launcher', ['promptportal/main.ts', 'launcher'], {
+  PROMPTPORTAL_HUB_URL: BASE, PROMPTPORTAL_WORKSTATION_PASSWORD: NODE_PASS, PROMPTPORTAL_NODE_NAME: NODE,
 });
 await until('launcher registered', 10000, async () => {
   const { body } = await api('/api/state');
@@ -174,7 +174,7 @@ await until('launcher registered', 10000, async () => {
 });
 console.log('OK launcher registered');
 
-const badCreate = await api('/api/sessions', { cwd: path.join(CWD, 'pt-e2e-definitely-missing') });
+const badCreate = await api('/api/sessions', { cwd: path.join(CWD, 'promptportal-e2e-definitely-missing') });
 if (badCreate.status !== 400 || !String(badCreate.body?.error).includes('does not exist')) {
   fail(`bad-cwd create: ${badCreate.status} ${JSON.stringify(badCreate.body)}`);
 }

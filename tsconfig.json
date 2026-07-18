@@ -10,5 +10,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["server.ts", "lib", "pt", "test"]
+  "include": ["server.ts", "lib", "promptportal", "test"]
 }

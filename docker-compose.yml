@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.hub
-    container_name: pocketterminal-hub
+    container_name: promptportal-hub
     restart: unless-stopped
     # Bound to loopback: the app speaks plaintext HTTP, so it must not be
     # reachable directly from outside the host. Put a TLS-terminating reverse
@@ -15,11 +15,11 @@ services:
     ports:
       - "127.0.0.1:27180:8080"
     environment:
-      # The two secrets: browser sign-in (username "pocketterm") and
+      # The two secrets: browser sign-in (username "promptportal") and
       # workstation registration (see .env.example).
-      POCKETTERM_WEBACCESS_PASSWORD: ${POCKETTERM_WEBACCESS_PASSWORD:?set POCKETTERM_WEBACCESS_PASSWORD in the environment or .env}
-      POCKETTERM_WORKSTATION_PASSWORD: ${POCKETTERM_WORKSTATION_PASSWORD:?set POCKETTERM_WORKSTATION_PASSWORD in the environment or .env}
-      POCKETTERM_TRUST_PROXY: ${POCKETTERM_TRUST_PROXY:-}
+      PROMPTPORTAL_WEBACCESS_PASSWORD: ${PROMPTPORTAL_WEBACCESS_PASSWORD:?set PROMPTPORTAL_WEBACCESS_PASSWORD in the environment or .env}
+      PROMPTPORTAL_WORKSTATION_PASSWORD: ${PROMPTPORTAL_WORKSTATION_PASSWORD:?set PROMPTPORTAL_WORKSTATION_PASSWORD in the environment or .env}
+      PROMPTPORTAL_TRUST_PROXY: ${PROMPTPORTAL_TRUST_PROXY:-}
     # The hub brokers sockets and spawns nothing; keep it that way.
     security_opt:
       - no-new-privileges:true
@@ -46,19 +46,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.workstation
-    container_name: pocketterminal-server
+    container_name: promptportal-server
     restart: unless-stopped
     # No `init: true` here on purpose: compose's docker-init would sit at PID 1
-    # holding POCKETTERM_WORKSTATION_PASSWORD in its environment for the
+    # holding PROMPTPORTAL_WORKSTATION_PASSWORD in its environment for the
     # container's life. The entrypoint execs tini (baked into the image)
     # itself, after moving the secret off the environment.
     depends_on:
       - hub
     environment:
-      POCKETTERM_WORKSTATION_PASSWORD: ${POCKETTERM_WORKSTATION_PASSWORD:?set POCKETTERM_WORKSTATION_PASSWORD in the environment or .env}
-      POCKETTERM_HUB_URL: ws://hub:8080
-      POCKETTERM_NODE_NAME: ${POCKETTERM_NODE_NAME:-server}
-      POCKETTERM_SHELL: ${POCKETTERM_SHELL:-}
+      PROMPTPORTAL_WORKSTATION_PASSWORD: ${PROMPTPORTAL_WORKSTATION_PASSWORD:?set PROMPTPORTAL_WORKSTATION_PASSWORD in the environment or .env}
+      PROMPTPORTAL_HUB_URL: ws://hub:8080
+      PROMPTPORTAL_NODE_NAME: ${PROMPTPORTAL_NODE_NAME:-server}
+      PROMPTPORTAL_SHELL: ${PROMPTPORTAL_SHELL:-}
     # This container runs arbitrary commands (that is its job), including
     # permission-skipping coding agents — a runaway fork bomb must stop at the
     # container, not take the host's PID table with it. Generous enough for
@@ -71,7 +71,7 @@ services:
     healthcheck:
       # The launcher is the one resident process; sessions are independent of
       # it, so its presence is what health means here.
-      test: ["CMD", "pgrep", "-f", "pt launcher"]
+      test: ["CMD", "pgrep", "-f", "promptportal launcher"]
       interval: 60s
       timeout: 10s
       retries: 3

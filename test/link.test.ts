@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CliError } from '../pt/config';
-import { normalizeHubUrl } from '../pt/link';
+import { CliError } from '../promptportal/config';
+import { normalizeHubUrl } from '../promptportal/link';
 
 describe('normalizeHubUrl', () => {
   test('maps http(s) to ws(s) and passes ws(s) through', () => {

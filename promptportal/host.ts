@@ -7,7 +7,7 @@ import { maintainLink, type Post } from './link';
 import { muteConsole, setLogTag } from './log';
 import { KILL_GRACE_MS, Session } from './session';
 
-// `pt` — one session, one process. Owns the pty, renders it natively in the
+// `promptportal` — one session, one process. Owns the pty, renders it natively in the
 // terminal it was started in (the window *is* the session: closing it kills
 // the shell, always), and dials the hub on its own outbound WebSocket so the
 // same screen is watchable and drivable from the browser. Spawned headless
@@ -23,7 +23,7 @@ export interface HostSpec {
   cwd?: string;
   command?: string;
   // Launcher specs pin the session's hub context (see launcher.ts); a
-  // locally started `pt` takes both from the environment instead.
+  // locally started `promptportal` takes both from the environment instead.
   hubUrl?: string;
   node?: string;
 }
@@ -177,7 +177,7 @@ export async function runHost(spec: HostSpec, ctx: HostContext): Promise<never> 
 
   if (!ctx.hubUrl) {
     if (windowed) {
-      process.stdout.write('\x1b[90m[not linked to a hub — set POCKETTERM_HUB_URL]\x1b[0m\r\n');
+      process.stdout.write('\x1b[90m[not linked to a hub — set PROMPTPORTAL_HUB_URL]\x1b[0m\r\n');
     }
     return new Promise(() => {}); // a local-only terminal until the window closes
   }

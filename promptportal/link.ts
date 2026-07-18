@@ -29,18 +29,18 @@ export function normalizeHubUrl(raw: string): string {
   else if (url.startsWith('http://')) normalized = 'ws://' + url.slice('http://'.length);
   else if (url.startsWith('wss://') || url.startsWith('ws://')) normalized = url;
   else if (!/^[A-Za-z][A-Za-z0-9+.-]*:/.test(url)) normalized = 'wss://' + url;
-  else throw new CliError(`POCKETTERM_HUB_URL must be an http(s)/ws(s) URL, got: ${raw}`);
+  else throw new CliError(`PROMPTPORTAL_HUB_URL must be an http(s)/ws(s) URL, got: ${raw}`);
   // A malformed value (bad host, stray space) must fail here, loudly, at
   // startup — not later inside the WebSocket constructor.
   try {
     if (new URL(normalized).hostname === '') throw new Error('no host');
   } catch {
-    throw new CliError(`POCKETTERM_HUB_URL is not a valid URL: ${raw}`);
+    throw new CliError(`PROMPTPORTAL_HUB_URL is not a valid URL: ${raw}`);
   }
   // Endpoint paths are appended to this value (`${url}/session`), which a
   // query or fragment would silently corrupt.
   if (normalized.includes('?') || normalized.includes('#')) {
-    throw new CliError(`POCKETTERM_HUB_URL must not carry a query or fragment: ${raw}`);
+    throw new CliError(`PROMPTPORTAL_HUB_URL must not carry a query or fragment: ${raw}`);
   }
   return normalized;
 }

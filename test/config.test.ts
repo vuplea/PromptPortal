@@ -3,20 +3,20 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { NODE_NAME_RE } from '../lib/protocol';
-import { CliError, resolveExistingDir, resolveNodeName } from '../pt/config';
+import { CliError, resolveExistingDir, resolveNodeName } from '../promptportal/config';
 
 describe('resolveNodeName', () => {
   afterEach(() => {
-    delete process.env.POCKETTERM_NODE_NAME;
+    delete process.env.PROMPTPORTAL_NODE_NAME;
   });
 
   test('takes a valid configured name verbatim', () => {
-    process.env.POCKETTERM_NODE_NAME = 'my-box.2';
+    process.env.PROMPTPORTAL_NODE_NAME = 'my-box.2';
     expect(resolveNodeName()).toBe('my-box.2');
   });
 
   test('rejects a configured name with forbidden characters', () => {
-    process.env.POCKETTERM_NODE_NAME = 'not a name';
+    process.env.PROMPTPORTAL_NODE_NAME = 'not a name';
     expect(() => resolveNodeName()).toThrow(CliError);
   });
 
@@ -32,6 +32,6 @@ describe('resolveExistingDir', () => {
   });
 
   test('rejects a directory that does not exist', () => {
-    expect(() => resolveExistingDir(path.join(os.tmpdir(), 'pt-definitely-missing-xyz'))).toThrow(CliError);
+    expect(() => resolveExistingDir(path.join(os.tmpdir(), 'promptportal-definitely-missing-xyz'))).toThrow(CliError);
   });
 });

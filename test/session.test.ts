@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import os from 'node:os';
 
 import type { Msg } from '../lib/protocol';
-import { Session } from '../pt/session';
+import { Session } from '../promptportal/session';
 
 // One real shell on one real pty — slow (a shell start) but this is the
 // heart of the workstation, so it earns its seconds.

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# The workstation password arrives as POCKETTERM_WORKSTATION_PASSWORD in PID
+# The workstation password arrives as PROMPTPORTAL_WORKSTATION_PASSWORD in PID
 # 1's environment, which /proc/1/environ keeps readable to same-uid processes
 # even after `unset`. So the entrypoint runs in two stages: stage 1 (shell
 # builtins only) moves the password onto stdin and re-execs itself, rebuilding
@@ -10,15 +10,15 @@ set -e
 # the password is in reach uses an absolute path: $HOME/.local/bin leads PATH
 # and is writable, so a bare name could resolve to a binary planted on a
 # previous run.
-if [ -z "${POCKETTERM_ENTRYPOINT_STAGE2:-}" ]; then
-    PASSWORD="${POCKETTERM_WORKSTATION_PASSWORD:-}"
-    unset POCKETTERM_WORKSTATION_PASSWORD
-    export POCKETTERM_ENTRYPOINT_STAGE2=1
+if [ -z "${PROMPTPORTAL_ENTRYPOINT_STAGE2:-}" ]; then
+    PASSWORD="${PROMPTPORTAL_WORKSTATION_PASSWORD:-}"
+    unset PROMPTPORTAL_WORKSTATION_PASSWORD
+    export PROMPTPORTAL_ENTRYPOINT_STAGE2=1
     exec /usr/local/bin/workstation-entrypoint.sh <<STAGE2_PASSWORD
 $PASSWORD
 STAGE2_PASSWORD
 fi
-unset POCKETTERM_ENTRYPOINT_STAGE2
+unset PROMPTPORTAL_ENTRYPOINT_STAGE2
 # `read` is a shell builtin, so no planted $HOME/.local/bin binary can shadow
 # it. It takes the single heredoc line and drops the newline; the launcher
 # strips any stray CR anyway.
@@ -63,9 +63,9 @@ install_tool "Codex" https://chatgpt.com/codex/install.sh sh
 # reaps zombies from exited terminal sessions). tini is exec'd here rather than
 # added via compose `init: true`, whose docker-init would keep the container's
 # original environment — password included — in /proc/1/environ for the
-# container's lifetime. (POCKETTERM_PASSWORD_STDIN tells the launcher to read
+# container's lifetime. (PROMPTPORTAL_PASSWORD_STDIN tells the launcher to read
 # the secret from stdin, and it hands it to each session host the same way.)
-export POCKETTERM_PASSWORD_STDIN=1
-exec /usr/bin/tini -- /usr/local/bin/pt launcher <<PT_PASSWORD
+export PROMPTPORTAL_PASSWORD_STDIN=1
+exec /usr/bin/tini -- /usr/local/bin/promptportal launcher <<PROMPTPORTAL_PASSWORD
 $PASSWORD
-PT_PASSWORD
+PROMPTPORTAL_PASSWORD

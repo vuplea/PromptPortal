@@ -82,10 +82,10 @@ function defaultShell(): string {
 function childEnv(): Record<string, string | undefined> {
   const env = { ...process.env };
   // Keep the workstation password out of the shell's environment: a host
-  // started with POCKETTERM_WORKSTATION_PASSWORD set must not pass it on to
+  // started with PROMPTPORTAL_WORKSTATION_PASSWORD set must not pass it on to
   // the shell.
-  delete env.POCKETTERM_WORKSTATION_PASSWORD;
-  delete env.POCKETTERM_PASSWORD_STDIN;
+  delete env.PROMPTPORTAL_WORKSTATION_PASSWORD;
+  delete env.PROMPTPORTAL_PASSWORD_STDIN;
   if (!isWindows) {
     env.TERM = 'xterm-256color';
     env.COLORTERM = 'truecolor';

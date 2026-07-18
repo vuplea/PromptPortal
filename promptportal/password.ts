@@ -4,7 +4,7 @@ import { promptHidden, readSecretFromStdin } from '../lib/secret';
 import { CliError, CREDENTIAL_TARGET, env, isWindows } from './config';
 import { normalizeHubUrl, warnIfCleartext } from './link';
 
-// `pt set-password` — store the workstation password in Windows Credential
+// `promptportal set-password` — store the workstation password in Windows Credential
 // Manager, where hosts and the launcher read it from, instead of an
 // environment variable. Piped input (the installer) or a hidden prompt; an
 // empty entry keeps the already-stored credential. The password is proved
@@ -13,7 +13,7 @@ import { normalizeHubUrl, warnIfCleartext } from './link';
 
 export async function setPassword(): Promise<void> {
   if (!isWindows) {
-    throw new CliError('set-password uses Windows Credential Manager; on this platform set POCKETTERM_WORKSTATION_PASSWORD instead');
+    throw new CliError('set-password uses Windows Credential Manager; on this platform set PROMPTPORTAL_WORKSTATION_PASSWORD instead');
   }
   const stored = readCredential(CREDENTIAL_TARGET);
   const entered = process.stdin.isTTY
@@ -38,7 +38,7 @@ export async function setPassword(): Promise<void> {
 // hub; it upgrades, proves the password, and closes.
 function verifyPassword(password: string): Promise<void> {
   if (env.hubUrl.length === 0) {
-    console.log('POCKETTERM_HUB_URL is not set; storing the password unverified.');
+    console.log('PROMPTPORTAL_HUB_URL is not set; storing the password unverified.');
     return Promise.resolve();
   }
   const normalized = normalizeHubUrl(env.hubUrl);

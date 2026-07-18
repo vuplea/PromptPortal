@@ -1,18 +1,18 @@
 # The workstation image (compose service `workstation`, docker-compose.yml):
-# the `server` workstation — `pt launcher` plus a coding toolchain. Sessions
-# created from the hub run as headless `pt` processes the launcher spawns,
+# the `server` workstation — `promptportal launcher` plus a coding toolchain. Sessions
+# created from the hub run as headless `promptportal` processes the launcher spawns,
 # each on its own WebSocket to the hub. Runs as the unprivileged user "user"
 # (uid 1000). The hub image is its own build (Dockerfile.hub).
 
-# ----------------------------------------------------------------- pt binary
-# The workstation binary (see pt/), compiled by Bun into one self-contained
+# ----------------------------------------------------------------- promptportal binary
+# The workstation binary (see promptportal/), compiled by Bun into one self-contained
 # file. `bun build --compile` targets the stage's own architecture, so
 # multi-arch builds need no target juggling.
-FROM oven/bun:1.3 AS pt-build
+FROM oven/bun:1.3 AS promptportal-build
 WORKDIR /src
 COPY lib ./lib
-COPY pt ./pt
-RUN bun build --compile ./pt/main.ts --outfile /out/pt
+COPY promptportal ./promptportal
+RUN bun build --compile ./promptportal/main.ts --outfile /out/promptportal
 
 # --------------------------------------------------------------- workstation
 FROM node:22-bookworm
@@ -20,7 +20,7 @@ FROM node:22-bookworm
 # Tools available to the terminal sessions this container hosts — plus tini,
 # which the entrypoint execs as PID 1 to reap zombies from exited sessions.
 # (Compose `init: true` would do that too, but its docker-init keeps the
-# container's original environment — POCKETTERM_WORKSTATION_PASSWORD included
+# container's original environment — PROMPTPORTAL_WORKSTATION_PASSWORD included
 # — for the container's lifetime.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tini \
@@ -66,7 +66,7 @@ RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
 ENV PATH="${PATH}:/usr/local/share/dotnet-tools"
 RUN dotnet tool install ilspycmd --tool-path /usr/local/share/dotnet-tools
 
-COPY --from=pt-build /out/pt /usr/local/bin/pt
+COPY --from=promptportal-build /out/promptportal /usr/local/bin/promptportal
 COPY workstation-entrypoint.sh /usr/local/bin/workstation-entrypoint.sh
 RUN chmod +x /usr/local/bin/workstation-entrypoint.sh
 

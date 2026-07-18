@@ -9,20 +9,20 @@ import { normalizeHubUrl, warnIfCleartext } from './link';
 import { initLog } from './log';
 import { setPassword } from './password';
 
-//   pt [label] [--cwd DIR] [-- CMD ARGS...]    host a session in this terminal
+//   promptportal [label] [--cwd DIR] [-- CMD ARGS...]    host a session in this terminal
 //                          (everything after -- is the command, verbatim —
 //                           no quoting)
-//   pt launcher            run the workstation launcher (a logon task on
+//   promptportal launcher            run the workstation launcher (a logon task on
 //                          Windows, the container entrypoint) so sessions can
 //                          be started from the hub
-//   pt set-password        store the workstation password in Credential Manager (Windows)
+//   promptportal set-password        store the workstation password in Credential Manager (Windows)
 //
-// (internal)  pt run --spec <b64url-json>      host a session from a launcher spec
+// (internal)  promptportal run --spec <b64url-json>      host a session from a launcher spec
 //
-// A session lives exactly as long as its `pt` process: close the window (or
+// A session lives exactly as long as its `promptportal` process: close the window (or
 // kill it from the hub) and the shell dies with it.
 
-const USAGE = 'pt [label] [--cwd DIR] [-- CMD ARGS...] | pt launcher | pt set-password';
+const USAGE = 'promptportal [label] [--cwd DIR] [-- CMD ARGS...] | promptportal launcher | promptportal set-password';
 
 const args = process.argv.slice(2);
 
@@ -30,12 +30,12 @@ const args = process.argv.slice(2);
 // same-user processes can read /proc/<pid>/environ, which deleting the
 // variable does not clear. The launcher hands it to headless hosts over stdin
 // (see workstation-entrypoint.sh); on Windows it lives in Credential Manager
-// (`pt set-password`, written by the installer). The delete below still clears
-// a POCKETTERM_WORKSTATION_PASSWORD set directly in the environment, so a
+// (`promptportal set-password`, written by the installer). The delete below still clears
+// a PROMPTPORTAL_WORKSTATION_PASSWORD set directly in the environment, so a
 // session's shell doesn't inherit it.
 async function resolvePassword(): Promise<string> {
   let password = env.password;
-  delete process.env.POCKETTERM_WORKSTATION_PASSWORD;
+  delete process.env.PROMPTPORTAL_WORKSTATION_PASSWORD;
   if (password.length === 0 && env.passwordFromStdin) {
     password = await readSecretFromStdin();
     // stdin here carries the secret (a shell heredoc's temp file, or the
@@ -69,10 +69,10 @@ async function workstationContext(spec: HostSpec = {}): Promise<HostContext> {
 // just unlinked.
 function requirePassword(ctx: HostContext): HostContext {
   if (ctx.password.length > 0) return ctx;
-  throw new CliError('POCKETTERM_HUB_URL is set but no workstation password was found'
+  throw new CliError('PROMPTPORTAL_HUB_URL is set but no workstation password was found'
     + (isWindows
-      ? ' (run `pt set-password`, or set POCKETTERM_WORKSTATION_PASSWORD)'
-      : ' (set POCKETTERM_WORKSTATION_PASSWORD)'));
+      ? ' (run `promptportal set-password`, or set PROMPTPORTAL_WORKSTATION_PASSWORD)'
+      : ' (set PROMPTPORTAL_WORKSTATION_PASSWORD)'));
 }
 
 async function hostSession(spec: HostSpec): Promise<never> {
@@ -117,14 +117,14 @@ function parseSpec(rest: string[]): HostSpec {
 }
 
 // The launcher and session hosts log to a file as well as the console (see
-// pt/log.ts) — initialized before anything can fail, so a launcher dying at
+// promptportal/log.ts) — initialized before anything can fail, so a launcher dying at
 // logon inside its invisible conhost still leaves a trace.
 try {
   switch (args[0]) {
     case 'launcher': {
       initLog('launcher');
       const ctx = await workstationContext();
-      if (!ctx.hubUrl) throw new CliError('POCKETTERM_HUB_URL is not set — the launcher exists only to serve a hub');
+      if (!ctx.hubUrl) throw new CliError('PROMPTPORTAL_HUB_URL is not set — the launcher exists only to serve a hub');
       await runLauncher(requirePassword(ctx));
       break;
     }
@@ -140,11 +140,11 @@ try {
       console.log(USAGE);
       break;
     default:
-      // Headless hosting is reserved for launcher specs (`pt run`): a bare
-      // `pt` in a script or healthcheck must not silently spawn an invisible
+      // Headless hosting is reserved for launcher specs (`promptportal run`): a bare
+      // `promptportal` in a script or healthcheck must not silently spawn an invisible
       // shell.
       if (process.stdin.isTTY !== true) {
-        throw new CliError('pt hosts a session in the terminal it runs in, and no terminal is attached'
+        throw new CliError('promptportal hosts a session in the terminal it runs in, and no terminal is attached'
           + ` — usage: ${USAGE}`);
       }
       initLog('session');

@@ -489,13 +489,13 @@ async function connect() {
   if (seq !== connectSeq || currentId !== id || document.body.dataset.view !== 'term') return;
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // 'pocketterminal' is BROWSER_PROTOCOL in lib/protocol.ts (kept in sync by
+  // 'promptportal' is BROWSER_PROTOCOL in lib/protocol.ts (kept in sync by
   // hand — no build step bundles the shared constant into this page).
-  ws = new WebSocket(`${proto}//${location.host}/ws?session=${encodeURIComponent(id)}`, ['pocketterminal', token]);
+  ws = new WebSocket(`${proto}//${location.host}/ws?session=${encodeURIComponent(id)}`, ['promptportal', token]);
 
   // A black-holed handshake (network dropped mid-connect) fires neither open
   // nor close until the browser's own timeout, minutes away — the workstation
-  // link has a silence watchdog (pt/link.ts), so give this end one too.
+  // link has a silence watchdog (promptportal/link.ts), so give this end one too.
   const dialTimer = setTimeout(() => {
     if (seq !== connectSeq) return;
     discardSocket();
@@ -788,7 +788,7 @@ if (matchMedia('(pointer: coarse)').matches) {
 // the hub reaped it while the phone slept and the close never arrived, or the
 // network path changed under it. readyState cannot tell — WS-level pings are
 // answered below the JS layer — so this is the same application-frame
-// watchdog the workstation link runs (pt/link.ts).
+// watchdog the workstation link runs (promptportal/link.ts).
 const SILENCE_TIMEOUT_MS = 90 * 1000;
 
 function reconnectIfDead() {

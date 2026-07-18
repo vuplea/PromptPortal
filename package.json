@@ -1,5 +1,5 @@
 {
-  "name": "pocketterminal",
+  "name": "promptportal",
   "version": "1.0.0",
   "description": "Phone-friendly terminal hub for coding agents — run Claude Code or Codex sessions on your workstations and drive them from anywhere",
   "license": "MIT",

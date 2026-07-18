@@ -1,9 +1,9 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Install PocketTerminal on this Windows workstation: build the native
-  pt.exe, persist its configuration, register the launcher to run at logon,
-  and wire up Windows Terminal + the `pt` command. With -InstallHub, also
+  Install PromptPortal on this Windows workstation: build the native
+  promptportal.exe, persist its configuration, register the launcher to run at logon,
+  and wire up Windows Terminal + the `promptportal` command. With -InstallHub, also
   build hub.exe and register the hub itself as a background logon task, so
   this machine serves the UI and brokers browsers to workstations. With
   -Uninstall, remove everything a previous run installed on this machine.
@@ -11,18 +11,18 @@
   in, leaving every stored setting untouched.
 
 .DESCRIPTION
-  After this runs, `pt` in any terminal hosts a session that is also
+  After this runs, `promptportal` in any terminal hosts a session that is also
   reachable from your hub, and sessions started from the hub open as terminal
   windows here. A session lives exactly as long as its window: closing it
   ends the session everywhere. Re-run any time to change settings or rebuild;
   it is idempotent (at the password prompts, Enter keeps what is stored).
 
   Each piece is a single self-contained executable built from this repo:
-  windows\dist\pt.exe, plus windows\dist\hub.exe (static assets embedded)
+  windows\dist\promptportal.exe, plus windows\dist\hub.exe (static assets embedded)
   with -InstallHub. Bun (>= 1.3.14, bun.sh) is the only build prerequisite.
 
 .EXAMPLE
-  .\install.ps1 -HubUrl https://pocketterminal.example.com -NodeName laptop
+  .\install.ps1 -HubUrl https://promptportal.example.com -NodeName laptop
   # prompts for the workstation password (hidden); -Password '...' skips the prompt
   # for scripted installs, at the cost of the password landing in shell
   # history and the process command line
@@ -30,7 +30,7 @@
 .EXAMPLE
   .\install.ps1 -InstallHub
   # hosts the hub here too: builds windows\dist\hub.exe, stores both hub
-  # passwords in Credential Manager, registers the 'PocketTerminalHub' logon
+  # passwords in Credential Manager, registers the 'PromptPortalHub' logon
   # task, and points this workstation at http://127.0.0.1:8080. The hub
   # listens on loopback; front it with TLS (e.g. tailscale serve) to reach
   # it from other machines.
@@ -44,7 +44,7 @@
 
 .EXAMPLE
   .\install.ps1 -Update
-  # rebuilds pt.exe (and hub.exe when the hub is installed here) from the
+  # rebuilds promptportal.exe (and hub.exe when the hub is installed here) from the
   # current repo and restarts the tasks, touching no passwords, environment
   # variables, PATH entry, or Windows Terminal profile. Needs no -HubUrl: the
   # stored configuration already has it. Open sessions end with the swap.
@@ -64,16 +64,16 @@ $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path "$PSScriptRoot\..").Path
 $dist = "$PSScriptRoot\dist"
-$launcherTask = 'PocketTerminalLauncher'
-$hubTask = 'PocketTerminalHub'
-$fragDir = "$env:LOCALAPPDATA\Microsoft\Windows Terminal\Fragments\PocketTerminal"
+$launcherTask = 'PromptPortalLauncher'
+$hubTask = 'PromptPortalHub'
+$fragDir = "$env:LOCALAPPDATA\Microsoft\Windows Terminal\Fragments\PromptPortal"
 # Credential Manager targets and user environment variables the install writes,
-# mirrored from pt/config.ts (CREDENTIAL_TARGET) and lib/settings.ts since
+# mirrored from promptportal/config.ts (CREDENTIAL_TARGET) and lib/settings.ts since
 # PowerShell cannot import them — kept beside the tasks and paths so -Uninstall
 # removes exactly what was created, and nothing else.
-$workstationCredential = 'PocketTerminal'
-$hubCredentials = @('PocketTerminalHub/webaccess', 'PocketTerminalHub/workstation')
-$userEnvVars = @('POCKETTERM_HUB_URL', 'POCKETTERM_NODE_NAME')
+$workstationCredential = 'PromptPortal'
+$hubCredentials = @('PromptPortalHub/webaccess', 'PromptPortalHub/workstation')
+$userEnvVars = @('PROMPTPORTAL_HUB_URL', 'PROMPTPORTAL_NODE_NAME')
 
 # --- Helpers -------------------------------------------------------------------
 
@@ -81,14 +81,16 @@ $userEnvVars = @('POCKETTERM_HUB_URL', 'POCKETTERM_NODE_NAME')
 # Staging first: a failed build must tear nothing down.
 function New-StagedExecutable([string]$EntryPoint, [string]$Name) {
   Write-Host "`nBuilding $Name.exe..."
-  bun build --compile $EntryPoint --outfile "$dist\$Name-new.exe"
+  # --windows-icon brands the executable with the PromptPortal app icon.
+  bun build --compile $EntryPoint --outfile "$dist\$Name-new.exe" `
+    --windows-icon "$PSScriptRoot\promptportal.ico" --windows-title 'PromptPortal'
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$dist\$Name-new.exe")) {
     throw "Build failed; see output above."
   }
 }
 
 # Compile the executables to their staging names, verifying the one build
-# prerequisite first: pt (the workstation launcher and its session hosts), and
+# prerequisite first: promptportal (the workstation launcher and its session hosts), and
 # the hub with -Hub. Shared by the install and the update, so both build under
 # the same Bun floor and neither drifts. Staging first means a failed build
 # tears nothing down.
@@ -96,20 +98,20 @@ function Build-StagedExecutables([bool]$Hub, [bool]$Launcher = $true) {
   $null = (Get-Command bun -ErrorAction Stop).Source
   # Bun.spawn's `terminal` option (the pty every session runs in) needs 1.3.14,
   # and `bun build --compile` embeds the running Bun as the exe's runtime — an
-  # old Bun would yield a pt.exe whose sessions die at spawn. Prerelease
+  # old Bun would yield a promptportal.exe whose sessions die at spawn. Prerelease
   # suffixes (1.3.16-canary.…) are not [version]-castable; strip them.
   $bunVersion = [version]((bun --version) -replace '[-+].*$', '')
   if ($bunVersion -lt [version]'1.3.14') {
-    throw "Bun $bunVersion is too old; pt needs >= 1.3.14 (bun upgrade)"
+    throw "Bun $bunVersion is too old; promptportal needs >= 1.3.14 (bun upgrade)"
   }
   if ($Hub) {
     # server.ts embeds the @xterm assets out of node_modules, which a fresh
-    # clone lacks (bun build does not install; pt.exe needs no packages).
+    # clone lacks (bun build does not install; promptportal.exe needs no packages).
     bun install --frozen-lockfile --cwd $repo
     if ($LASTEXITCODE -ne 0) { throw 'bun install failed; see output above.' }
     New-StagedExecutable "$repo\server.ts" 'hub'
   }
-  if ($Launcher) { New-StagedExecutable "$repo\pt\main.ts" 'pt' }
+  if ($Launcher) { New-StagedExecutable "$repo\promptportal\main.ts" 'promptportal' }
 }
 
 # Stop every running build of $Name — the launcher, its session hosts, or the
@@ -118,7 +120,7 @@ function Build-StagedExecutables([bool]$Hub, [bool]$Launcher = $true) {
 # this would also stop an unrelated Bun exe that happened to be named
 # $Name.exe, a trade accepted to reliably retire our own stragglers. Shared by
 # the staged-build swap and by -Uninstall.
-function Stop-PocketTerminalProcess([string]$Name, [string]$StopNote) {
+function Stop-PromptPortalProcess([string]$Name, [string]$StopNote) {
   $running = @(Get-Process $Name -ErrorAction SilentlyContinue | Where-Object { $_.Company -eq 'Oven' })
   if ($running) {
     Write-Host "Stopping running $Name processes$StopNote..."
@@ -134,7 +136,7 @@ function Stop-PocketTerminalProcess([string]$Name, [string]$StopNote) {
 # by hand has no task at all.
 function Install-StagedExecutable([string]$Name, [string]$TaskName, [string]$StopNote) {
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-  Stop-PocketTerminalProcess $Name $StopNote
+  Stop-PromptPortalProcess $Name $StopNote
   # Swap the new binary in via rename-aside: Move-Item -Force does not reliably
   # replace an existing file, and a straggler process would hold the exe locked
   # against deletion anyway — but Windows always allows renaming a running
@@ -210,7 +212,7 @@ function Edit-UserPath([ValidateSet('Add', 'Remove')][string]$Action) {
     }
     [UIntPtr]$broadcastResult = [UIntPtr]::Zero
     [void][Win32.Env]::SendMessageTimeoutW([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$broadcastResult)
-    if ($Action -eq 'Add') { Write-Host "Added $dist to user PATH (restart shells to pick up `pt`)." }
+    if ($Action -eq 'Add') { Write-Host "Added $dist to user PATH (restart shells to pick up `promptportal`)." }
     else { Write-Host "Removed $dist from user PATH." }
   } finally {
     $envKey.Close()
@@ -223,7 +225,7 @@ function Edit-UserPath([ValidateSet('Add', 'Remove')][string]$Action) {
 # The built exes under dist\ and the hub-data directory (saved profiles and
 # quick commands) are deliberately left in place.
 function Invoke-Uninstall {
-  Write-Host "Uninstalling PocketTerminal..."
+  Write-Host "Uninstalling PromptPortal..."
   # Tasks before processes, so neither the launcher nor the hub is restarted at
   # logon or by a task's restart-on-failure while we are tearing it down.
   foreach ($task in $hubTask, $launcherTask) {
@@ -233,8 +235,8 @@ function Invoke-Uninstall {
       Write-Host "Removed scheduled task '$task'."
     }
   }
-  Stop-PocketTerminalProcess 'hub' ''
-  Stop-PocketTerminalProcess 'pt' ' (open sessions end with them)'
+  Stop-PromptPortalProcess 'hub' ''
+  Stop-PromptPortalProcess 'promptportal' ' (open sessions end with them)'
   # cmdkey deletes the Credential Manager entries set-password wrote:
   # lib/credential.ts only reads and writes generic credentials, so there is no
   # exe path to reuse, and this must work without any build output. cmdkey
@@ -252,10 +254,10 @@ function Invoke-Uninstall {
   Edit-UserPath 'Remove'
   if (Test-Path $fragDir) {
     Remove-Item $fragDir -Recurse -Force
-    Write-Host "Removed the Windows Terminal 'PocketTerminal' profile."
+    Write-Host "Removed the Windows Terminal 'PromptPortal' profile."
   }
   Write-Host "`nDone. Left in place: the built executables in $dist\ and any hub"
-  Write-Host "data in $env:LOCALAPPDATA\PocketTerminal\hub-data."
+  Write-Host "data in $env:LOCALAPPDATA\PromptPortal\hub-data."
 }
 
 # Prove a headless task's process came up and stayed up. The task runs it with
@@ -313,9 +315,9 @@ function Invoke-Update {
   $launcherInstalled = [bool](Get-ScheduledTask -TaskName $launcherTask -ErrorAction SilentlyContinue)
   $hubInstalled = [bool](Get-ScheduledTask -TaskName $hubTask -ErrorAction SilentlyContinue)
   if (-not $launcherInstalled -and -not $hubInstalled) {
-    throw 'Nothing to update: no PocketTerminal launcher or hub is installed on this machine. Run install.ps1 with -HubUrl (or -InstallHub) first.'
+    throw 'Nothing to update: no PromptPortal launcher or hub is installed on this machine. Run install.ps1 with -HubUrl (or -InstallHub) first.'
   }
-  Write-Host "Updating PocketTerminal in place (rebuilding executables)..."
+  Write-Host "Updating PromptPortal in place (rebuilding executables)..."
   Write-Host "Repo: $repo"
 
   # Build only the halves installed here, to staging names so a failed build
@@ -334,11 +336,11 @@ function Invoke-Update {
     Write-Host "The hub is up on http://127.0.0.1:$hubPort."
   }
   if ($launcherInstalled) {
-    Install-StagedExecutable 'pt' $launcherTask ' (open sessions end with them)'
+    Install-StagedExecutable 'promptportal' $launcherTask ' (open sessions end with them)'
     Start-ScheduledTask -TaskName $launcherTask
-    Wait-ProcessHolds 'pt' "$dist\pt.exe" 'launcher' "`"$dist\pt.exe`" launcher"
+    Wait-ProcessHolds 'promptportal' "$dist\promptportal.exe" 'launcher' "`"$dist\promptportal.exe`" launcher"
   }
-  Write-Host "`nDone. Rebuilt and restarted. Host a session from any terminal with:  pt"
+  Write-Host "`nDone. Rebuilt and restarted. Host a session from any terminal with:  promptportal"
 }
 
 if ($Uninstall) {
@@ -355,7 +357,7 @@ if ($Update) {
 }
 
 # --- Validate inputs and prerequisites -----------------------------------------
-# Mirrors the node-name rule pt itself enforces (pt/config.ts) — a conscious
+# Mirrors the node-name rule promptportal itself enforces (promptportal/config.ts) — a conscious
 # one-line duplication, since PowerShell cannot import it: failing here beats
 # a launcher that dies at logon with the error visible only by hand-running it.
 if ($NodeName -notmatch '^[A-Za-z0-9_.-]{1,64}$') {
@@ -375,8 +377,8 @@ Write-Host "Hub:       $HubUrl$(if ($InstallHub) { ' (installed here)' })"
 
 # The environment outranks Credential Manager by design (containers, dev
 # runs), so a password variable persisted user- or machine-wide would make
-# the hub and pt silently ignore what this install stores.
-$passwordVars = @('POCKETTERM_WORKSTATION_PASSWORD') + $(if ($InstallHub) { @('POCKETTERM_WEBACCESS_PASSWORD') } else { @() })
+# the hub and promptportal silently ignore what this install stores.
+$passwordVars = @('PROMPTPORTAL_WORKSTATION_PASSWORD') + $(if ($InstallHub) { @('PROMPTPORTAL_WEBACCESS_PASSWORD') } else { @() })
 foreach ($name in $passwordVars) {
   foreach ($scope in 'User', 'Machine') {
     if ([Environment]::GetEnvironmentVariable($name, $scope)) {
@@ -413,12 +415,12 @@ if ($InstallHub) {
   # Profiles and quick commands persist here (the compose deployment's
   # hub-data volume, as a directory). A scheduled task has no per-process
   # environment channel, so the settings ride the command line — including
-  # --host, so a stray user-level POCKETTERM_HOST variable can never flip
+  # --host, so a stray user-level PROMPTPORTAL_HOST variable can never flip
   # this headless plain-HTTP hub onto the network.
-  $hubData = "$env:LOCALAPPDATA\PocketTerminal\hub-data"
+  $hubData = "$env:LOCALAPPDATA\PromptPortal\hub-data"
   New-Item -ItemType Directory -Force -Path $hubData | Out-Null
   $hubCommand = "`"$dist\hub.exe`" --host 127.0.0.1 --port $HubPort --data `"$hubData`""
-  Register-HeadlessLogonTask $hubTask $hubCommand 'PocketTerminal hub'
+  Register-HeadlessLogonTask $hubTask $hubCommand 'PromptPortal hub'
 
   Start-ScheduledTask -TaskName $hubTask
   # The task runs the hub headless, so a startup error would die invisibly;
@@ -439,45 +441,49 @@ if ($InstallHub) {
 # persisted below is not part of this process's environment yet, so hand the
 # URL over explicitly.
 Write-Host "`nStoring the workstation password in Credential Manager..."
-$env:POCKETTERM_HUB_URL = $HubUrl
+$env:PROMPTPORTAL_HUB_URL = $HubUrl
 if ($Password -or $InstallHub) {
   # With -InstallHub the password was already prompted for above (an empty
   # entry pipes through as "keep the stored one") — never ask twice.
-  Invoke-Utf8Pipe @($Password) "$dist\pt-new.exe" @('set-password')
+  Invoke-Utf8Pipe @($Password) "$dist\promptportal-new.exe" @('set-password')
 } else {
-  # No -Password given: let pt prompt for it hidden.
-  & "$dist\pt-new.exe" set-password
+  # No -Password given: let promptportal prompt for it hidden.
+  & "$dist\promptportal-new.exe" set-password
 }
 if ($LASTEXITCODE -ne 0) { throw "Failed to store the password; see output above." }
 
-Install-StagedExecutable 'pt' $launcherTask ' (open sessions end with them)'
+Install-StagedExecutable 'promptportal' $launcherTask ' (open sessions end with them)'
 
 # --- Persist configuration ------------------------------------------------------
 # Non-secret settings go to user environment variables; the scheduled tasks and
 # any shell you open inherit them.
 Write-Host "Setting user environment variables..."
-[Environment]::SetEnvironmentVariable('POCKETTERM_HUB_URL',   $HubUrl,   'User')
-[Environment]::SetEnvironmentVariable('POCKETTERM_NODE_NAME', $NodeName, 'User')
+[Environment]::SetEnvironmentVariable('PROMPTPORTAL_HUB_URL',   $HubUrl,   'User')
+[Environment]::SetEnvironmentVariable('PROMPTPORTAL_NODE_NAME', $NodeName, 'User')
 
-# Put dist\ on the user PATH so `pt` resolves everywhere.
+# Put dist\ on the user PATH so `promptportal` resolves everywhere.
 Edit-UserPath 'Add'
 
 # --- Register the launcher to run at logon (windowless) -----------------------
 # The launcher is the workstation's one resident process: it exists so
 # sessions can be started from the hub (each opens as a terminal window
 # here).
-Register-HeadlessLogonTask $launcherTask "`"$dist\pt.exe`" launcher" 'PocketTerminal workstation launcher'
+Register-HeadlessLogonTask $launcherTask "`"$dist\promptportal.exe`" launcher" 'PromptPortal workstation launcher'
 
 # --- Install the Windows Terminal fragment ------------------------------------
-# Adds a "PocketTerminal" profile that opens a new hub-connected session
-# (it just runs `pt`).
+# Adds a "PromptPortal" profile that opens a new hub-connected session
+# (it just runs `promptportal`).
 New-Item -ItemType Directory -Force -Path $fragDir | Out-Null
-# -Encoding UTF8 explicitly: the template holds an em-dash and an emoji icon,
-# and Windows PowerShell 5.1 reads ANSI by default, which would mangle both.
+# Ship the app icon beside the exe so the profile points at a stable path, then
+# resolve both placeholders (exe path + icon path) in the fragment.
+Copy-Item "$PSScriptRoot\promptportal.ico" "$dist\promptportal.ico" -Force
+# -Encoding UTF8 explicitly: the note holds non-ASCII, and Windows PowerShell
+# 5.1 reads ANSI by default, which would mangle it.
 $fragment = (Get-Content "$PSScriptRoot\windows-terminal-fragment.template.json" -Raw -Encoding UTF8).
-  Replace('__PT__', ("$dist\pt.exe" -replace '\\', '\\'))
-Set-Content -Path "$fragDir\pocketterminal.json" -Value $fragment -Encoding UTF8
-Write-Host "Installed Windows Terminal fragment (new 'PocketTerminal' profile)."
+  Replace('__PROMPTPORTAL__', ("$dist\promptportal.exe" -replace '\\', '\\')).
+  Replace('__ICON__', ("$dist\promptportal.ico" -replace '\\', '\\'))
+Set-Content -Path "$fragDir\promptportal.json" -Value $fragment -Encoding UTF8
+Write-Host "Installed Windows Terminal fragment (new 'PromptPortal' profile)."
 
 # --- (Re)start it --------------------------------------------------------------
 # Stop first so a re-run picks up the freshly built executable.
@@ -488,12 +494,12 @@ Start-ScheduledTask -TaskName $launcherTask
 # die invisibly; prove it came up and stayed up before declaring success. The
 # password and hub URL were already proven against the hub by set-password
 # above, so a launcher that holds is a launcher that registers.
-Wait-ProcessHolds 'pt' "$dist\pt.exe" 'launcher' "`"$dist\pt.exe`" launcher"
-Write-Host "`nDone. The launcher is running. Host a session from any terminal with:  pt"
-Write-Host "In Windows Terminal, the 'PocketTerminal' profile opens a connected session."
+Wait-ProcessHolds 'promptportal' "$dist\promptportal.exe" 'launcher' "`"$dist\promptportal.exe`" launcher"
+Write-Host "`nDone. The launcher is running. Host a session from any terminal with:  promptportal"
+Write-Host "In Windows Terminal, the 'PromptPortal' profile opens a connected session."
 Write-Host "Closing a session's window ends that session everywhere."
 if ($InstallHub) {
-  Write-Host "The hub is serving on http://127.0.0.1:$HubPort (task '$hubTask', data in $env:LOCALAPPDATA\PocketTerminal\hub-data)."
+  Write-Host "The hub is serving on http://127.0.0.1:$HubPort (task '$hubTask', data in $env:LOCALAPPDATA\PromptPortal\hub-data)."
   Write-Host "It speaks plain HTTP on loopback; to reach it from other machines put TLS in"
   Write-Host "front (e.g. tailscale serve --bg $HubPort) and use that URL from browsers and workstations."
 }

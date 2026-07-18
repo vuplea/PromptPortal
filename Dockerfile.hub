@@ -25,12 +25,12 @@ WORKDIR /app
 COPY --from=build /app/hub ./hub
 
 # Profiles and quick commands persist on a small dedicated volume.
-# POCKETTERM_HOST must override the server's loopback default here: the
+# PROMPTPORTAL_HOST must override the server's loopback default here: the
 # container is only reachable at all through its published (loopback-bound)
 # port or the compose network.
-ENV POCKETTERM_DATA=/data \
-    POCKETTERM_PORT=8080 \
-    POCKETTERM_HOST=0.0.0.0
+ENV PROMPTPORTAL_DATA=/data \
+    PROMPTPORTAL_PORT=8080 \
+    PROMPTPORTAL_HOST=0.0.0.0
 RUN mkdir /data && chown user:user /data
 
 USER user

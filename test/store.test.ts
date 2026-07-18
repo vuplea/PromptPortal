@@ -8,7 +8,7 @@ import { Store } from '../lib/store';
 let dirs: string[] = [];
 
 function tempDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-store-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'promptportal-store-test-'));
   dirs.push(dir);
   return dir;
 }

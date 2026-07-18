@@ -1,7 +1,7 @@
 import { CliError } from './errors';
 
 // Windows Credential Manager access (generic credentials in the user's
-// store), shared by the workstation (`pt set-password`, one credential) and
+// store), shared by the workstation (`promptportal set-password`, one credential) and
 // the hub (`hub set-password`, one per hub password). Keeps secrets out of
 // environment variables and the registry; note a stored credential stays
 // readable by any process running as this user, these ones included.
@@ -24,7 +24,7 @@ function advapi32() {
 }
 
 // A null-terminated UTF-16LE buffer — the string form every Win32 *W API
-// (here and in pt/window.ts) takes.
+// (here and in promptportal/window.ts) takes.
 export function utf16z(value: string): Buffer {
   return Buffer.from(value + '\0', 'utf16le');
 }
@@ -56,7 +56,7 @@ export function writeCredential(target: string, secret: string): void {
   // These buffers must stay referenced until the call returns; the struct
   // holds raw pointers into them.
   const targetName = utf16z(target);
-  const user = utf16z('pocketterm');
+  const user = utf16z('promptportal');
   const blob = Buffer.from(secret, 'utf16le');
   const cred = Buffer.alloc(CREDENTIAL_SIZE);
   cred.writeUInt32LE(CRED_TYPE_GENERIC, 4);
