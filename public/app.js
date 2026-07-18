@@ -834,4 +834,31 @@ async function init() {
   }, 5000);
 }
 
+/* --------------------------------------------------- install (PWA) */
+
+// Offer a home-screen install. Chromium fires beforeinstallprompt, which we
+// stash and replay from a real button; iOS Safari has no such event, so we
+// show the manual Share -> Add to Home Screen hint instead. Hidden once the
+// app runs standalone (already installed) or the user dismisses it.
+function setupInstall() {
+  const bar = $('#install'), btn = $('#btn-install'), hint = $('#install-hint'), dismiss = $('#install-dismiss');
+  const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (!bar || installed || sessionStorage.getItem('install-dismissed')) return;
+  let deferred = null;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; btn.hidden = false; bar.hidden = false; });
+  addEventListener('appinstalled', () => { bar.hidden = true; deferred = null; });
+  btn.addEventListener('click', async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    await deferred.userChoice;
+    deferred = null;
+    bar.hidden = true;
+  });
+  dismiss.addEventListener('click', () => { bar.hidden = true; sessionStorage.setItem('install-dismissed', '1'); });
+  const ua = navigator.userAgent;
+  const iOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (iOS && /WebKit/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)) { hint.hidden = false; bar.hidden = false; }
+}
+setupInstall();
+
 init();

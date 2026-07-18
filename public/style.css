@@ -68,6 +68,22 @@ body[data-view="term"] #home { display: none; }
   margin: 0 auto;
 }
 #home h1 { font-size: 20px; margin: 4px 0 16px; }
+#install {
+  display: flex; align-items: center; gap: 10px;
+  margin: -6px 0 18px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 10px; font-size: 13px;
+}
+#btn-install {
+  background: var(--accent); color: #101018; font-weight: 600;
+  border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+}
+#install-hint { flex: 1; color: var(--text); }
+#install-hint b { color: var(--accent); }
+#install-dismiss {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 15px; padding: 4px 6px;
+}
 #home section { margin-bottom: 24px; }
 #home h2 {
   font-size: 13px;
