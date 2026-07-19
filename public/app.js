@@ -836,17 +836,20 @@ async function init() {
 
 /* --------------------------------------------------- install (PWA) */
 
-// Offer a home-screen install. Chromium fires beforeinstallprompt, which we
-// stash and replay from a real button; iOS Safari has no such event, so we
-// show the manual Share -> Add to Home Screen hint instead. Hidden once the
-// app runs standalone (already installed) or the user dismisses it.
+// Offer a home-screen install until the user dismisses it. Chromium fires
+// beforeinstallprompt, which we stash and replay from a real button; iOS Safari
+// has no such event, so we show the manual Share -> Add to Home Screen hint
+// instead. Skipped while the app runs standalone, and the dismissal is
+// remembered for good, since iOS Safari cannot tell an app that is already on
+// the home screen from a plain browser tab.
 function setupInstall() {
   const bar = $('#install'), btn = $('#btn-install'), hint = $('#install-hint'), dismiss = $('#install-dismiss');
   const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  if (!bar || installed || sessionStorage.getItem('install-dismissed')) return;
+  if (!bar || installed || localStorage.getItem('install-dismissed')) return;
+  const close = () => { bar.hidden = true; localStorage.setItem('install-dismissed', '1'); };
   let deferred = null;
-  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; btn.hidden = false; bar.hidden = false; });
-  addEventListener('appinstalled', () => { bar.hidden = true; deferred = null; });
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; btn.hidden = bar.hidden = false; });
+  addEventListener('appinstalled', () => { deferred = null; close(); });
   btn.addEventListener('click', async () => {
     if (!deferred) return;
     deferred.prompt();
@@ -854,10 +857,25 @@ function setupInstall() {
     deferred = null;
     bar.hidden = true;
   });
-  dismiss.addEventListener('click', () => { bar.hidden = true; sessionStorage.setItem('install-dismissed', '1'); });
+  dismiss.addEventListener('click', close);
+
+  // Browsers without beforeinstallprompt can only be installed by hand, so
+  // spell out the gesture. On iOS only Safari can add to the home screen —
+  // Chrome, Firefox and Edge there are WebKit shells that cannot, so they get
+  // nothing. Chromium elsewhere fires the event and uses the button instead.
   const ua = navigator.userAgent;
   const iOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (iOS && /WebKit/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)) { hint.hidden = false; bar.hidden = false; }
+  const bold = (text) => el('b', { textContent: text });
+  const gesture =
+    iOS && /WebKit/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)
+      ? ['tap ', bold('Share'), ' → ', bold('Add to Home Screen')]
+      : /Android/.test(ua) && /Firefox/.test(ua)
+        ? ['open the ', bold('⋮'), ' menu → ', bold('Add to Home screen')]
+        : null;
+  if (gesture) {
+    hint.append('Install: ', ...gesture);
+    hint.hidden = bar.hidden = false;
+  }
 }
 setupInstall();
 

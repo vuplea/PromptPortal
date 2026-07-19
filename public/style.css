@@ -13,6 +13,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* An id rule with `display` outranks the UA's `[hidden] { display: none }`,
+   so restate it with enough weight to win. */
+[hidden] { display: none !important; }
+
 html, body {
   height: 100%;
   overscroll-behavior: none;
