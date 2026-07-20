@@ -83,7 +83,8 @@ function childEnv(): Record<string, string | undefined> {
   const env = { ...process.env };
   // Keep the workstation password out of the shell's environment: a host
   // started with PROMPTPORTAL_WORKSTATION_PASSWORD set must not pass it on to
-  // the shell.
+  // the shell. Values a project's .env contributed are already gone — main.ts
+  // drops them from this process at startup (dropAutoloadedDotenv).
   delete env.PROMPTPORTAL_WORKSTATION_PASSWORD;
   delete env.PROMPTPORTAL_PASSWORD_STDIN;
   if (!isWindows) {

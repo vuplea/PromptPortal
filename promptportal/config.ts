@@ -14,6 +14,18 @@ export { CliError };
 
 export const isWindows = process.platform === 'win32';
 
+// Compiled (`bun build --compile`, the installed promptportal.exe) the executable is
+// the program; under `bun promptportal/main.ts` the runtime is bun itself, so the
+// script path has to be passed along to spawn another one, and the dotenv
+// autoload the compiled builds disable is in play (see dropAutoloadedDotenv).
+//
+// Told apart by where the entry point lives: a compiled binary's is inside
+// Bun's virtual filesystem, never on disk. Anything unrecognized counts as a
+// source run, so a Bun binary under an unexpected name — a version manager's
+// `bun-1.3.14` — errs toward sanitizing the environment and toward a launcher
+// spawn that fails loudly, rather than one that silently leaks.
+export const isCompiled = /^(?:[a-z]:[\\/]~bun[\\/]|[\\/]\$bunfs[\\/])/i.test(Bun.main);
+
 // The workstation password's home on Windows: a generic credential in the
 // user's Credential Manager (lib/credential.ts), written by `promptportal set-password`
 // and read back by every session host and the launcher.
@@ -32,6 +44,71 @@ export const env = {
   // (powershell.exe on Windows, $SHELL/bash elsewhere) — see promptportal/session.ts.
   get shell(): string { return process.env.PROMPTPORTAL_SHELL ?? ''; },
 };
+
+// Bun autoloads .env files from a process's startup directory into process.env
+// before any of our code runs. Nothing here should answer to the directory a
+// terminal happens to be started in: not the shell or hub promptportal itself
+// picks, and not what the shells it hosts inherit. The shipped binaries are
+// compiled with --no-compile-autoload-dotenv and so never see those values; a
+// run from a clone (`bun promptportal/main.ts`) has no flag we can pass on the
+// user's behalf, so it drops them instead — leaving both paths behaving alike.
+//
+// Every file Bun can autoload from `dir` counts, not the subset it picked:
+// which environment-specific files it reads depends on the NODE_ENV it started
+// with, and a dotenv file may itself define NODE_ENV — after the fact the two
+// are indistinguishable, so guessing risks reading the wrong ones. Parents are
+// not searched, and files Bun never autoloads (e.g. `.env.example`) are left
+// alone.
+//
+// Names are all we take, and the regex approximates Bun's parser loosely. Both
+// over-strip: a name Bun never injected — or one whose inherited value won over
+// the dotenv file's — is dropped anyway. Telling those apart would need a
+// Bun-faithful value parser, and dropping a variable beats leaking a secret.
+const ENV_ASSIGNMENT = /^\s*(?:export\s+)?([^\s#=]+)\s*=/;
+const ENV_FILES = [
+  '.env', '.env.local',
+  '.env.development', '.env.development.local',
+  '.env.production', '.env.production.local',
+  '.env.test', '.env.test.local',
+];
+
+export function autoloadedEnvKeys(dir: string): Set<string> {
+  const keys = new Set<string>();
+  for (const file of ENV_FILES) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(dir, file), 'utf8');
+    } catch {
+      continue; // file absent — nothing to strip
+    }
+    // A lone \r separates lines for Bun too, so splitting on \n alone would
+    // miss — and leak — every assignment after the first on such a line.
+    for (const line of text.split(/[\r\n]+/)) {
+      const match = ENV_ASSIGNMENT.exec(line);
+      if (match) keys.add(match[1]!);
+    }
+  }
+  return keys;
+}
+
+// What the process itself runs on, which a project's .env has no business
+// costing it: dropping PATH would leave both this process and its shells unable
+// to resolve a binary, and the rest locate the home, system and temp
+// directories they read. None is plausibly an app secret. Matched
+// case-insensitively — Windows spells it `Path`.
+const KEEP_REGARDLESS = new Set(['PATH', 'HOME', 'USERPROFILE', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP']);
+
+// Called once, before anything reads configuration. A compiled build has
+// nothing to drop — autoload was off, so these names can only hold values the
+// user set themselves. (A binary compiled by hand without the flag falls
+// outside this; both supported build paths pass it.) Nothing chdirs, so the
+// default cwd here is still the directory Bun read the files from.
+export function dropAutoloadedDotenv(dir = process.cwd()): void {
+  if (isCompiled) return;
+  for (const key of autoloadedEnvKeys(dir)) {
+    if (!KEEP_REGARDLESS.has(key.toUpperCase())) delete process.env[key];
+  }
+}
 
 // This workstation's name: PROMPTPORTAL_NODE_NAME, or the hostname lowercased
 // with non-conforming chars turned into '-'.

@@ -2,7 +2,9 @@ import fs from 'node:fs';
 
 import { readCredential } from '../lib/credential';
 import { readSecretFromStdin } from '../lib/secret';
-import { CliError, CREDENTIAL_TARGET, env, isWindows, resolveNodeName } from './config';
+import {
+  CliError, CREDENTIAL_TARGET, dropAutoloadedDotenv, env, isWindows, resolveNodeName,
+} from './config';
 import { runHost, type HostContext, type HostSpec } from './host';
 import { runLauncher } from './launcher';
 import { normalizeHubUrl, warnIfCleartext } from './link';
@@ -25,6 +27,11 @@ import { setPassword } from './password';
 const USAGE = 'promptportal [label] [--cwd DIR] [-- CMD ARGS...] | promptportal launcher | promptportal set-password';
 
 const args = process.argv.slice(2);
+
+// First thing, so every read below — and every shell a session hosts — sees an
+// environment the startup directory's .env had no say in. Safe here because no
+// module reads configuration while being imported.
+dropAutoloadedDotenv();
 
 // The workstation password is kept out of this process's environment:
 // same-user processes can read /proc/<pid>/environ, which deleting the

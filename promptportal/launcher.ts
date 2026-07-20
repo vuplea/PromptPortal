@@ -1,7 +1,5 @@
-import path from 'node:path';
-
 import { LAUNCHER_PROTOCOL, type Msg } from '../lib/protocol';
-import { isWindows, resolveExistingDir } from './config';
+import { isCompiled, isWindows, resolveExistingDir } from './config';
 import { maintainLink } from './link';
 import type { HostContext } from './host';
 import { openHostWindow } from './window';
@@ -13,14 +11,9 @@ import { openHostWindow } from './window';
 // session), headless in the workstation container. It relays no terminal
 // traffic and owns nothing: stopping it strands no sessions.
 
-// Compiled (`bun build --compile`, the installed promptportal.exe) the executable is
-// the program; under `bun promptportal/main.ts` in development the script path must be
-// passed along.
-const COMPILED = !/^bun(\.exe)?$/i.test(path.basename(process.execPath));
-
 function hostArgs(spec: string): string[] {
   const args = ['run', '--spec', spec];
-  return COMPILED ? args : [process.argv[1]!, ...args];
+  return isCompiled ? args : [process.argv[1]!, ...args];
 }
 
 export async function runLauncher(ctx: HostContext): Promise<never> {

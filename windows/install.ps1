@@ -78,12 +78,20 @@ $userEnvVars = @('PROMPTPORTAL_HUB_URL', 'PROMPTPORTAL_NODE_NAME')
 # --- Helpers -------------------------------------------------------------------
 
 # Compile one self-contained executable to its staging name ($Name-new.exe).
-# Staging first: a failed build must tear nothing down.
-function New-StagedExecutable([string]$EntryPoint, [string]$Name) {
+# Staging first: a failed build must tear nothing down. Both builds disable
+# bunfig autoload, so a bunfig.toml in the directory the binary starts in cannot
+# `preload` code into it. -NoDotenv additionally turns off dotenv autoload; the
+# workstation needs it off so a session host cannot pick up that directory's
+# .env and pass it to the shells it hosts, while the hub — which spawns no
+# shells — keeps Bun's default.
+function New-StagedExecutable([string]$EntryPoint, [string]$Name, [switch]$NoDotenv) {
   Write-Host "`nBuilding $Name.exe..."
+  # [string[]] holds: an if-expression's output is unrolled, so an untyped
+  # $dotenv would become a bare string and splat one character per argument.
+  [string[]]$dotenv = if ($NoDotenv) { '--no-compile-autoload-dotenv' } else { @() }
   # --windows-icon brands the executable with the PromptPortal app icon.
-  bun build --compile $EntryPoint --outfile "$dist\$Name-new.exe" `
-    --windows-icon "$PSScriptRoot\promptportal.ico" --windows-title 'PromptPortal'
+  bun build --compile $EntryPoint --outfile "$dist\$Name-new.exe" --no-compile-autoload-bunfig `
+    --windows-icon "$PSScriptRoot\promptportal.ico" --windows-title 'PromptPortal' @dotenv
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$dist\$Name-new.exe")) {
     throw "Build failed; see output above."
   }
@@ -111,7 +119,7 @@ function Build-StagedExecutables([bool]$Hub, [bool]$Launcher = $true) {
     if ($LASTEXITCODE -ne 0) { throw 'bun install failed; see output above.' }
     New-StagedExecutable "$repo\server.ts" 'hub'
   }
-  if ($Launcher) { New-StagedExecutable "$repo\promptportal\main.ts" 'promptportal' }
+  if ($Launcher) { New-StagedExecutable "$repo\promptportal\main.ts" 'promptportal' -NoDotenv }
 }
 
 # Stop every running build of $Name — the launcher, its session hosts, or the

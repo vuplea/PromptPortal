@@ -12,7 +12,10 @@ RUN bun install --frozen-lockfile --production
 COPY server.ts ./
 COPY lib ./lib
 COPY public ./public
-RUN bun build --compile server.ts --outfile hub
+# --no-compile-autoload-bunfig: a compiled binary otherwise reads a bunfig.toml
+# from whatever directory it starts in, and a `preload` there runs before the
+# program does.
+RUN bun build --compile --no-compile-autoload-bunfig server.ts --outfile hub
 
 # The runtime stage keeps the bun base (the compose healthcheck probes with
 # `bun -e`) but only the compiled binary from the build.
